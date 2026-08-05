@@ -39,6 +39,11 @@ with its supporting authoring references vendored beside it. See
 11. Runs a logically separate semantic review.
 12. Exports a consumer pack plus an audit folder and checksums.
 
+The Gradio Studio also restores all persisted artifacts when a run is resumed, offers an optional
+"I'm Feeling Lucky" path with explicit automatic-stage and auto-approval controls, and can download
+a credential-scrubbed session diagnostics bundle after a failure. Image generation remains an
+independent opt-in because it adds cost and is not required for every learning objective.
+
 ## Local development
 
 ```bash

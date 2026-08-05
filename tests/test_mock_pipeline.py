@@ -5,8 +5,10 @@ import zipfile
 
 from jsonschema import Draft202012Validator
 
+from knowledge_pack_studio.diagnostics import build_diagnostics_bundle
 from knowledge_pack_studio.schema_loader import load_pack_schema
 from knowledge_pack_studio.store import ArtifactStore
+from knowledge_pack_studio.ui import _run_snapshot
 from knowledge_pack_studio.workflow import StudioWorkflow
 
 
@@ -81,3 +83,46 @@ def test_manifest_records_hashes_and_no_secret_configuration(tmp_path):
     assert manifest["artifacts"]["pack_json"]["sha256"]
     assert manifest["artifacts"]["evidence_ledger"]["input_hashes"]
     assert "api_key" not in json.dumps(config).lower()
+
+
+def test_resume_snapshot_restores_the_complete_workspace(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    run_id = StudioWorkflow(store).run_all_mock("Resume this knowledge pack")
+
+    snapshot = _run_snapshot(store, run_id)
+
+    assert snapshot["run_id"] == run_id
+    assert snapshot["mock"] is True
+    assert snapshot["idea"] == "Resume this knowledge pack"
+    assert "Mock research dossier" in snapshot["research_report"]
+    assert "# How Honey Bees Communicate" in snapshot["guide_markdown"]
+    assert '"target_shape_ratios"' in snapshot["design_json"]
+    assert '"items"' in snapshot["items_json"]
+    assert snapshot["bundle_file"]
+    assert snapshot["selected_tab"] == "validate"
+
+
+def test_diagnostics_bundle_redacts_keys_and_includes_stage_errors(tmp_path):
+    marker = "sk-test-secret-that-must-not-appear"
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.create_run("Diagnostic test", mock=True)
+    store.write_json(
+        run_id,
+        "test_error",
+        "errors/test.json",
+        {"message": f"provider rejected {marker}"},
+        [],
+    )
+
+    target = build_diagnostics_bundle(store, run_id, tmp_path / "downloads")
+
+    with zipfile.ZipFile(target) as archive:
+        assert "run/errors/test.json" in archive.namelist()
+        combined = "\n".join(
+            archive.read(name).decode("utf-8")
+            for name in archive.namelist()
+            if name.endswith((".json", ".md"))
+        )
+    assert marker not in combined
+    assert "[REDACTED]" in combined
