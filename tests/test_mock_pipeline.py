@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import zipfile
 
+import pytest
 from jsonschema import Draft202012Validator
 
 from knowledge_pack_studio.diagnostics import build_diagnostics_bundle
+from knowledge_pack_studio.models import ClarificationQuestion
+from knowledge_pack_studio.notebook import NotebookStudio
 from knowledge_pack_studio.schema_loader import load_pack_schema
 from knowledge_pack_studio.store import ArtifactStore
 from knowledge_pack_studio.ui import _run_snapshot
@@ -60,6 +63,9 @@ def test_export_contains_publishable_pack_schema_and_audit(tmp_path):
         assert f"{pack_root}/pack.json" in names
         assert f"{pack_root}/guides/study-guide.md" in names
         assert "audit/schema/pack.schema.json" in names
+        assert "audit/schema/pack-design.schema.json" in names
+        assert "audit/schema/visual-plan.schema.json" in names
+        assert "audit/schema/run-manifest.schema.json" in names
         assert "audit/evidence-ledger.json" in names
         assert "audit/validation-report.json" in names
         assert "README.md" in names
@@ -135,3 +141,40 @@ def test_diagnostics_bundle_redacts_keys_and_includes_stage_errors(tmp_path):
         )
     assert marker not in combined
     assert "[REDACTED]" in combined
+
+
+def test_required_clarification_answers_cannot_be_auto_approved(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.create_run("Approval gate", mock=True)
+    draft = workflow.clarify(run_id, {}, {})
+    draft.clarification_questions = [
+        ClarificationQuestion(
+            question_id="scope-boundary",
+            question="What is out of scope?",
+            why_it_matters="It changes the curriculum boundary.",
+        )
+    ]
+    store.write_json(
+        run_id,
+        "brief_draft",
+        "brief/brief-draft.json",
+        draft.model_dump(mode="json"),
+        [],
+    )
+
+    with pytest.raises(ValueError, match="scope-boundary"):
+        workflow.approve_brief(run_id, {})
+
+
+def test_notebook_facade_resumes_artifacts_and_reports_progress(tmp_path):
+    first = NotebookStudio(tmp_path / "runs", echo_progress=False)
+    run_id = first.workflow.run_all_mock("Notebook resume test")
+
+    resumed = NotebookStudio(tmp_path / "runs", echo_progress=False)
+    assert resumed.resume(run_id) == run_id
+    status = resumed.status()
+    assert status["artifact_count"] > 0
+    assert status["event_count"] > 0
+    assert status["final_bundle_path"]
+    assert "Grounded research" in resumed.status_markdown()

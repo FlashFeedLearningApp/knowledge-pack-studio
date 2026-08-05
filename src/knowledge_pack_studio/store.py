@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +27,8 @@ STAGES = [
     "brief_approval",
     "research",
     "extraction",
-    "study_guide",
     "pack_design",
+    "study_guide",
     "item_authoring",
     "visual_planning",
     "image_generation",
@@ -77,9 +78,25 @@ def sha256_bytes(value: bytes) -> str:
 
 
 class ArtifactStore:
-    def __init__(self, root: str | Path | None = None):
+    def __init__(
+        self,
+        root: str | Path | None = None,
+        event_sink: Callable[[RunEvent], None] | None = None,
+    ):
         self.root = Path(root) if root else default_run_root()
+        self.event_sink = event_sink
         self.root.mkdir(parents=True, exist_ok=True)
+
+    def _notify(self, event: RunEvent | None) -> None:
+        """Send live progress to an optional notebook/UI sink without risking the run."""
+
+        if event is None or self.event_sink is None:
+            return
+        try:
+            self.event_sink(event)
+        except Exception:
+            # Display callbacks are observational. A broken renderer must never fail authoring.
+            pass
 
     def create_run(self, idea: str, config: StudioConfig, mock: bool) -> RunManifest:
         stamp = utc_now().replace(":", "").replace("-", "").replace("+00:00", "z").lower()
@@ -137,19 +154,20 @@ class ArtifactStore:
             manifest.status = "needs_attention"
         elif state == StageState.RUNNING:
             manifest.status = "active"
+        event = None
         if state != previous_state:
             agent, model = self._stage_executor(manifest, stage)
-            manifest.events.append(
-                RunEvent(
-                    at=utc_now(),
-                    stage=stage,
-                    state=state,
-                    message=self._stage_message(stage, state),
-                    agent=agent,
-                    model=model,
-                )
+            event = RunEvent(
+                at=utc_now(),
+                stage=stage,
+                state=state,
+                message=self._stage_message(stage, state),
+                agent=agent,
+                model=model,
             )
+            manifest.events.append(event)
         self.save_manifest(manifest)
+        self._notify(event)
 
     def invalidate_downstream(self, run_id: str, stage: str) -> None:
         if stage not in STAGES:
@@ -175,17 +193,17 @@ class ArtifactStore:
         if call.tool_calls:
             usage.append(f"{call.tool_calls} tool call{'s' if call.tool_calls != 1 else ''}")
         suffix = f" ({', '.join(usage)})" if usage else ""
-        manifest.events.append(
-            RunEvent(
-                at=call.created_at,
-                stage=pipeline_stage,
-                state=StageState.RUNNING,
-                message=f"{call.agent} returned a provider response{suffix}.",
-                agent=call.agent,
-                model=call.model,
-            )
+        event = RunEvent(
+            at=call.created_at,
+            stage=pipeline_stage,
+            state=StageState.RUNNING,
+            message=f"{call.agent} returned a provider response{suffix}.",
+            agent=call.agent,
+            model=call.model,
         )
+        manifest.events.append(event)
         self.save_manifest(manifest)
+        self._notify(event)
 
     def record_event(
         self,
@@ -199,18 +217,18 @@ class ArtifactStore:
         """Append a bounded activity entry without changing stage state."""
 
         manifest = self.load_manifest(run_id)
-        manifest.events.append(
-            RunEvent(
-                at=utc_now(),
-                stage=stage,
-                state=state,
-                message=message,
-                agent=agent,
-                model=model,
-            )
+        event = RunEvent(
+            at=utc_now(),
+            stage=stage,
+            state=state,
+            message=message,
+            agent=agent,
+            model=model,
         )
+        manifest.events.append(event)
         manifest.events = manifest.events[-500:]
         self.save_manifest(manifest)
+        self._notify(event)
 
     @staticmethod
     def _stage_message(stage: str, state: StageState) -> str:

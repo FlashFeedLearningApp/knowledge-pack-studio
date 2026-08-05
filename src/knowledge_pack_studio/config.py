@@ -18,10 +18,10 @@ class AgentConfig(BaseModel):
 class StudioConfig(BaseModel):
     """Configuration persisted in a run manifest, never including secret values."""
 
-    pipeline_version: str = "0.1.0.dev1"
+    pipeline_version: str = "0.2.0.dev0"
     schema_version: str = "0.3.0"
     provider: str = "openai"
-    target_item_count: int = Field(default=12, ge=4, le=60)
+    target_item_count: int = Field(default=48, ge=12, le=240)
     max_web_searches: int = Field(default=12, ge=1, le=100)
     image_count_limit: int = Field(default=4, ge=0, le=20)
     agents: dict[str, AgentConfig] = Field(default_factory=lambda: default_agents())

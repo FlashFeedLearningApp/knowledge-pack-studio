@@ -97,19 +97,22 @@ def build_pack(
         )
 
     for asset in (image_ledger or {}).get("assets", []):
-        if asset.get("status") != "generated":
+        if asset.get("status") not in {"generated", "sourced"}:
             continue
-        item = pack_lookup.get(asset.get("itemId"))
-        if not item:
-            continue
-        item["illustration"] = {
-            "url": asset["relativePath"],
-            "imagePrompt": asset["prompt"],
-            "imageSearchTerm": asset["searchTerm"],
-            "alt": asset["altText"],
-            "credit": f"Generated with OpenAI {asset['model']}",
-            "kind": asset["kind"],
-        }
+        target_item_ids = asset.get("itemIds") or [asset.get("itemId")]
+        for item_id in (value for value in target_item_ids if value):
+            item = pack_lookup.get(item_id)
+            if not item:
+                continue
+            item["illustration"] = {
+                "url": asset["relativePath"],
+                "imagePrompt": asset["prompt"],
+                "imageSearchTerm": asset["searchTerm"],
+                "alt": asset["altText"],
+                "credit": asset.get("credit")
+                or f"Generated with OpenAI {asset.get('model', 'image model')}",
+                "kind": asset["kind"],
+            }
 
     lessons: list[dict[str, Any]] = []
     guide_path = "guides/study-guide.md"

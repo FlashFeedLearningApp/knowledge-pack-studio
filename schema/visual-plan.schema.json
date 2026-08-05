@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "VisualBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Item Ids",
+          "type": "array"
+        },
+        "teaching_purpose": {
+          "title": "Teaching Purpose",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "photo",
+            "diagram",
+            "map",
+            "chart",
+            "scrapbook"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "search_term": {
+          "minLength": 2,
+          "title": "Search Term",
+          "type": "string"
+        },
+        "alt_text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "generate": {
+          "title": "Generate",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "asset_id",
+        "item_ids",
+        "teaching_purpose",
+        "kind",
+        "prompt",
+        "search_term",
+        "alt_text",
+        "generate"
+      ],
+      "title": "VisualBrief",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "briefs": {
+      "items": {
+        "$ref": "#/$defs/VisualBrief"
+      },
+      "title": "Briefs",
+      "type": "array"
+    },
+    "exclusions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "briefs",
+    "exclusions"
+  ],
+  "title": "VisualPlan",
+  "type": "object"
+}

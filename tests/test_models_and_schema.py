@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import nbformat
 import pytest
 
 from knowledge_pack_studio.config import StudioConfig
-from knowledge_pack_studio.models import ItemDraft, RunManifest
+from knowledge_pack_studio.models import ItemDraft, RunManifest, VisualBrief
 from knowledge_pack_studio.schema_loader import pack_schema_path
 from knowledge_pack_studio.ui import _prepare_launch_kwargs, _validate_share_auth, build_app
 
@@ -37,7 +40,38 @@ def test_notebook_is_valid_and_has_colab_metadata():
 
 
 def test_pipeline_version_identifies_the_refreshed_colab_build():
-    assert StudioConfig().pipeline_version == "0.1.0.dev1"
+    assert StudioConfig().pipeline_version == "0.2.0.dev0"
+
+
+def test_native_notebook_is_valid_headless_and_self_contained():
+    notebook_path = Path(__file__).resolve().parents[1] / "notebooks/Knowledge_Pack_Studio_v2.ipynb"
+    notebook = nbformat.read(notebook_path, as_version=4)
+    nbformat.validate(notebook)
+    assert notebook.metadata.colab.name == "Knowledge Pack Studio v0.2"
+    source = "\n".join("".join(cell.source) for cell in notebook.cells)
+    assert "NotebookStudio" in source
+    assert "OPENAI_API_KEY_FF_KP" in source
+    assert "source first" in source
+    assert "studio.design()" in source
+    assert source.index("studio.design()") < source.index("studio.write_guide()")
+    assert "gradio" not in source.lower()
+    for cell in notebook.cells:
+        if cell.cell_type == "code":
+            ast.parse(cell.source)
+
+
+def test_core_import_does_not_load_the_legacy_ui_dependency():
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, knowledge_pack_studio; print('gradio' in sys.modules)",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "False"
 
 
 def test_item_shape_validation_rejects_incomplete_mcq():
@@ -54,9 +88,36 @@ def test_item_shape_validation_rejects_incomplete_mcq():
         )
 
 
+def test_legacy_visual_targets_upgrade_to_a_list():
+    brief = VisualBrief.model_validate(
+        {
+            "asset_id": "asset-one",
+            "item_id": "item-one, item-two",
+            "teaching_purpose": "Compare two related examples",
+            "kind": "photo",
+            "prompt": "A relevant instructional photograph",
+            "search_term": "relevant examples",
+            "alt_text": "Two related examples shown side by side",
+            "generate": False,
+        }
+    )
+    assert brief.item_ids == ["item-one", "item-two"]
+
+
 def test_pipeline_schemas_are_machine_readable():
     root = Path(__file__).resolve().parents[1] / "schema"
-    for filename in ("brief.schema.json", "evidence-ledger.schema.json", "pack.schema.json"):
+    for filename in (
+        "brief.schema.json",
+        "research-dossier.schema.json",
+        "evidence-ledger.schema.json",
+        "pack-design.schema.json",
+        "authored-items.schema.json",
+        "visual-plan.schema.json",
+        "validation-report.schema.json",
+        "semantic-review.schema.json",
+        "run-manifest.schema.json",
+        "pack.schema.json",
+    ):
         data = json.loads((root / filename).read_text())
         assert data.get("$schema") or data.get("type") == "object"
 

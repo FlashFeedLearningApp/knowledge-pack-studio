@@ -1,0 +1,210 @@
+{
+  "$defs": {
+    "LessonPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "title": "Lesson Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/PartPlan"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "lesson_id",
+        "title",
+        "rationale",
+        "parts"
+      ],
+      "title": "LessonPlan",
+      "type": "object"
+    },
+    "PartPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "part_id": {
+          "title": "Part Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "guide_heading": {
+          "title": "Guide Heading",
+          "type": "string"
+        },
+        "guide_anchor": {
+          "title": "Guide Anchor",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "target_item_count": {
+          "default": 8,
+          "maximum": 10,
+          "minimum": 6,
+          "title": "Target Item Count",
+          "type": "integer"
+        },
+        "planned_shapes": {
+          "items": {
+            "enum": [
+              "fact",
+              "definition",
+              "pair",
+              "mcq",
+              "numeric",
+              "procedure"
+            ],
+            "type": "string"
+          },
+          "title": "Planned Shapes",
+          "type": "array"
+        },
+        "visual_opportunities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Visual Opportunities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "part_id",
+        "title",
+        "objective",
+        "guide_heading",
+        "guide_anchor",
+        "claim_ids",
+        "planned_shapes",
+        "visual_opportunities"
+      ],
+      "title": "PartPlan",
+      "type": "object"
+    },
+    "ShapeRatioTargets": {
+      "additionalProperties": false,
+      "description": "Closed shape-ratio contract compatible with OpenAI strict Structured Outputs.",
+      "properties": {
+        "fact": {
+          "title": "Fact",
+          "type": "number"
+        },
+        "definition": {
+          "title": "Definition",
+          "type": "number"
+        },
+        "pair": {
+          "title": "Pair",
+          "type": "number"
+        },
+        "mcq": {
+          "title": "Mcq",
+          "type": "number"
+        },
+        "numeric": {
+          "title": "Numeric",
+          "type": "number"
+        },
+        "procedure": {
+          "title": "Procedure",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fact",
+        "definition",
+        "pair",
+        "mcq",
+        "numeric",
+        "procedure"
+      ],
+      "title": "ShapeRatioTargets",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "pack_id": {
+      "title": "Pack Id",
+      "type": "string"
+    },
+    "pack_name": {
+      "title": "Pack Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "target_item_count": {
+      "maximum": 240,
+      "minimum": 12,
+      "title": "Target Item Count",
+      "type": "integer"
+    },
+    "target_shape_ratios": {
+      "$ref": "#/$defs/ShapeRatioTargets"
+    },
+    "lessons": {
+      "items": {
+        "$ref": "#/$defs/LessonPlan"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Lessons",
+      "type": "array"
+    },
+    "coverage_gaps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Coverage Gaps",
+      "type": "array"
+    },
+    "topic_flex_exclusions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Topic Flex Exclusions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "pack_id",
+    "pack_name",
+    "description",
+    "target_item_count",
+    "target_shape_ratios",
+    "lessons",
+    "coverage_gaps",
+    "topic_flex_exclusions"
+  ],
+  "title": "PackDesign",
+  "type": "object"
+}

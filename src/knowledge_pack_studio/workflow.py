@@ -8,6 +8,7 @@ from typing import Any
 
 from .config import StudioConfig
 from .diagnostics import redact_secrets
+from .image_sourcery import source_image
 from .models import (
     ApprovedBrief,
     AuthoredItems,
@@ -84,6 +85,8 @@ class StudioWorkflow:
         try:
             idea = self.store.read_json(run_id, "idea.json")["idea"]
             result, call = self._provider(run_id, credentials).clarify(idea, intake)
+            # The run date is execution metadata owned by deterministic code, not an LLM guess.
+            result.as_of_date = utc_now()[:10]
             self.store.record_call(run_id, call)
             self.store.write_json(
                 run_id,
@@ -106,6 +109,16 @@ class StudioWorkflow:
             draft = BriefDraft.model_validate(
                 self.store.read_json(run_id, "brief/brief-draft.json")
             )
+            missing_answers = [
+                question.question_id
+                for question in draft.clarification_questions
+                if question.required and not answers.get(question.question_id, "").strip()
+            ]
+            if missing_answers:
+                raise ValueError(
+                    "Answer every required clarification question before approval: "
+                    + ", ".join(missing_answers)
+                )
             approved = ApprovedBrief(
                 **draft.model_dump(),
                 requester_answers=answers,
@@ -196,14 +209,22 @@ class StudioWorkflow:
             ledger = EvidenceLedger.model_validate(
                 self.store.read_json(run_id, "evidence/evidence-ledger.json")
             )
-            result, call = self._provider(run_id, credentials).write_guide(brief, ledger)
+            design_path = self.store.run_dir(run_id) / "design/pack-design.json"
+            design = (
+                PackDesign.model_validate(json.loads(design_path.read_text()))
+                if design_path.is_file()
+                else None
+            )
+            result, call = self._provider(run_id, credentials).write_guide(brief, ledger, design)
             self.store.record_call(run_id, call)
             self.store.write_text(
                 run_id,
                 "study_guide",
                 "guide/study-guide.md",
                 result,
-                self.store.artifact_hashes(run_id, "approved_brief", "evidence_ledger"),
+                self.store.artifact_hashes(
+                    run_id, "approved_brief", "evidence_ledger", "pack_design"
+                ),
                 "guide_author",
             )
             self.store.set_stage(run_id, stage, StageState.COMPLETE)
@@ -222,7 +243,8 @@ class StudioWorkflow:
             ledger = EvidenceLedger.model_validate(
                 self.store.read_json(run_id, "evidence/evidence-ledger.json")
             )
-            guide = self.store.read_text(run_id, "guide/study-guide.md")
+            guide_path = self.store.run_dir(run_id) / "guide/study-guide.md"
+            guide = guide_path.read_text() if guide_path.is_file() else ""
             result, call = self._provider(run_id, credentials).design(brief, ledger, guide)
             self.store.record_call(run_id, call)
             self.store.write_json(
@@ -230,7 +252,7 @@ class StudioWorkflow:
                 "pack_design",
                 "design/pack-design.json",
                 result.model_dump(mode="json"),
-                self.store.artifact_hashes(run_id, "evidence_ledger", "study_guide"),
+                self.store.artifact_hashes(run_id, "evidence_ledger"),
                 "pack_designer",
             )
             self.store.set_stage(run_id, stage, StageState.COMPLETE)
@@ -302,6 +324,12 @@ class StudioWorkflow:
         stage = "image_generation"
         self._start(run_id, stage)
         try:
+            preflight = self.preflight(run_id)
+            if not preflight.hard_gates_passed:
+                raise RuntimeError(
+                    "Structural preflight failed; repair the blueprint or authored items before "
+                    "incurring image-generation charges"
+                )
             manifest = self.store.load_manifest(run_id)
             config = self._config(run_id)
             design = PackDesign.model_validate(
@@ -310,6 +338,10 @@ class StudioWorkflow:
             plan = VisualPlan.model_validate(
                 self.store.read_json(run_id, "visuals/visual-plan.json")
             )
+            authored = AuthoredItems.model_validate(
+                self.store.read_json(run_id, "items/authored-items.json")
+            )
+            known_item_ids = {item.item_id for item in authored.items}
             provider = self._provider(run_id, credentials)
             assets: list[dict[str, Any]] = []
             selected_briefs = plan.briefs[: config.image_count_limit]
@@ -317,7 +349,7 @@ class StudioWorkflow:
             for index, brief in enumerate(selected_briefs, start=1):
                 base = {
                     "assetId": brief.asset_id,
-                    "itemId": brief.item_id,
+                    "itemIds": brief.item_ids,
                     "kind": brief.kind,
                     "prompt": brief.prompt,
                     "searchTerm": brief.search_term,
@@ -325,6 +357,12 @@ class StudioWorkflow:
                     "model": config.image_model,
                     "generatedAt": utc_now(),
                 }
+                unknown_item_ids = sorted(set(brief.item_ids) - known_item_ids)
+                if unknown_item_ids:
+                    raise ValueError(
+                        f"Visual {brief.asset_id} targets unknown items: "
+                        + ", ".join(unknown_item_ids)
+                    )
                 if manifest.mock or not brief.generate:
                     self.store.record_event(
                         run_id,
@@ -388,7 +426,147 @@ class StudioWorkflow:
             self._fail(run_id, stage, exc)
             raise
 
-    def _build_consumer_pack(self, run_id: str) -> dict[str, Any]:
+    def source_images(
+        self,
+        run_id: str,
+        credentials: dict[str, str],
+        *,
+        command: list[str],
+        providers: list[str],
+        judge: str = "openai",
+    ) -> dict[str, Any]:
+        """Acquire visuals through Image Source-cery with search before generation."""
+
+        stage = "image_generation"
+        self._start(run_id, stage)
+        try:
+            preflight = self.preflight(run_id)
+            if not preflight.hard_gates_passed:
+                raise RuntimeError(
+                    "Structural preflight failed; repair content before acquiring images"
+                )
+            manifest = self.store.load_manifest(run_id)
+            config = self._config(run_id)
+            design = PackDesign.model_validate(
+                self.store.read_json(run_id, "design/pack-design.json")
+            )
+            plan = VisualPlan.model_validate(
+                self.store.read_json(run_id, "visuals/visual-plan.json")
+            )
+            authored = AuthoredItems.model_validate(
+                self.store.read_json(run_id, "items/authored-items.json")
+            )
+            known_item_ids = {item.item_id for item in authored.items}
+            assets: list[dict[str, Any]] = []
+            selected = plan.briefs[: config.image_count_limit]
+            for index, brief in enumerate(selected, start=1):
+                unknown_item_ids = sorted(set(brief.item_ids) - known_item_ids)
+                if unknown_item_ids:
+                    raise ValueError(
+                        f"Visual {brief.asset_id} targets unknown items: "
+                        + ", ".join(unknown_item_ids)
+                    )
+                self.store.record_event(
+                    run_id,
+                    stage,
+                    StageState.RUNNING,
+                    f"Sourcing visual {index} of {len(selected)} ({brief.search_term}).",
+                    "image_sourcery",
+                    judge,
+                )
+                try:
+                    sourced = source_image(
+                        brief.search_term,
+                        command=command,
+                        providers=providers,
+                        judge=judge,
+                        credentials=credentials,
+                    )
+                    relative = (
+                        f"publishable/{design.pack_id}/sourced/{brief.asset_id}{sourced.extension}"
+                    )
+                    record = self.store.write_bytes(
+                        run_id,
+                        f"image_{brief.asset_id}",
+                        relative,
+                        sourced.payload,
+                        self.store.artifact_hashes(run_id, "visual_plan"),
+                        "image_sourcery",
+                    )
+                    provenance = sourced.provenance
+                    credit = " · ".join(
+                        value
+                        for value in (
+                            provenance.get("attribution"),
+                            provenance.get("license"),
+                        )
+                        if value
+                    )
+                    assets.append(
+                        {
+                            "assetId": brief.asset_id,
+                            "itemIds": brief.item_ids,
+                            "kind": brief.kind,
+                            "prompt": brief.prompt,
+                            "searchTerm": brief.search_term,
+                            "altText": brief.alt_text,
+                            "status": "sourced",
+                            "relativePath": (f"sourced/{brief.asset_id}{sourced.extension}"),
+                            "provider": provenance.get("provider"),
+                            "sourcePage": provenance.get("sourceUrl"),
+                            "license": provenance.get("license"),
+                            "attribution": provenance.get("attribution"),
+                            "credit": credit or "Source provenance recorded in image ledger",
+                            "judgeScore": provenance.get("score"),
+                            "judgeReason": provenance.get("reason"),
+                            "sha256": record.sha256,
+                            "bytes": len(sourced.payload),
+                            "acquiredAt": utc_now(),
+                        }
+                    )
+                except Exception as exc:
+                    assets.append(
+                        {
+                            "assetId": brief.asset_id,
+                            "itemIds": brief.item_ids,
+                            "kind": brief.kind,
+                            "prompt": brief.prompt,
+                            "searchTerm": brief.search_term,
+                            "altText": brief.alt_text,
+                            "status": "failed",
+                            "reason": redact_secrets(str(exc)),
+                        }
+                    )
+                    self.store.record_event(
+                        run_id,
+                        stage,
+                        StageState.RUNNING,
+                        f"No acceptable source was found for {brief.asset_id}; continuing.",
+                        "image_sourcery",
+                        judge,
+                    )
+            ledger = {
+                "assets": assets,
+                "mock": manifest.mock,
+                "strategy": "source-first",
+                "providers": providers,
+                "judge": judge,
+            }
+            self.store.write_json(
+                run_id,
+                "image_ledger",
+                "visuals/image-ledger.json",
+                ledger,
+                self.store.artifact_hashes(run_id, "visual_plan"),
+                "image_sourcery",
+            )
+            self.store.set_stage(run_id, stage, StageState.COMPLETE)
+            return ledger
+        except Exception as exc:
+            self._fail(run_id, stage, exc)
+            raise
+
+    def _build_consumer_pack(self, run_id: str, *, include_images: bool = True) -> dict[str, Any]:
         brief = ApprovedBrief.model_validate(
             self.store.read_json(run_id, "brief/approved-brief.json")
         )
@@ -403,7 +581,9 @@ class StudioWorkflow:
             self.store.read_json(run_id, "items/authored-items.json")
         )
         image_path = self.store.run_dir(run_id) / "visuals/image-ledger.json"
-        image_ledger = json.loads(image_path.read_text()) if image_path.is_file() else None
+        image_ledger = (
+            json.loads(image_path.read_text()) if include_images and image_path.is_file() else None
+        )
         pack, item_ledger = build_pack(
             brief,
             design,
@@ -441,6 +621,49 @@ class StudioWorkflow:
         if not pack_root.exists():
             raise RuntimeError("Pack builder did not create the publishable directory")
         return pack
+
+    def preflight(self, run_id: str) -> ValidationReport:
+        """Validate structure and evidence before optional image generation can spend money."""
+
+        pack = self._build_consumer_pack(run_id, include_images=False)
+        ledger = EvidenceLedger.model_validate(
+            self.store.read_json(run_id, "evidence/evidence-ledger.json")
+        )
+        design = PackDesign.model_validate(self.store.read_json(run_id, "design/pack-design.json"))
+        authored = AuthoredItems.model_validate(
+            self.store.read_json(run_id, "items/authored-items.json")
+        )
+        manifest = self.store.load_manifest(run_id)
+        report = validate_pack(
+            pack,
+            authored,
+            ledger,
+            design,
+            self.store.run_dir(run_id),
+            manifest.schema_version,
+            mock=False,
+        )
+        self.store.write_json(
+            run_id,
+            "preflight_report",
+            "validation/preflight-report.json",
+            report.model_dump(mode="json"),
+            self.store.artifact_hashes(run_id, "pack_json", "item_ledger"),
+            "deterministic_validator",
+        )
+        self.store.record_event(
+            run_id,
+            "validation",
+            StageState.COMPLETE if report.hard_gates_passed else StageState.FAILED,
+            (
+                "Structural preflight passed; optional image work may continue."
+                if report.hard_gates_passed
+                else "Structural preflight failed; image work is blocked until errors are fixed."
+            ),
+            "deterministic_validator",
+            None,
+        )
+        return report
 
     def validate(self, run_id: str) -> ValidationReport:
         stage = "validation"
@@ -567,8 +790,8 @@ class StudioWorkflow:
         self.approve_brief(run_id, {})
         self.research(run_id, credentials)
         self.extract(run_id, credentials)
-        self.write_guide(run_id, credentials)
         self.design(run_id, credentials)
+        self.write_guide(run_id, credentials)
         self.author(run_id, credentials)
         self.plan_visuals(run_id, credentials)
         self.generate_images(run_id, credentials)

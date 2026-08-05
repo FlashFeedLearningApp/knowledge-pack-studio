@@ -7,7 +7,7 @@ content, and visual assets have different review and licensing needs.
 
 1. Create a focused branch from `main`.
 2. Install with `python -m pip install -e '.[dev]'`.
-3. Run `ruff format --check src tests`, `ruff check src tests`, and `pytest`.
+3. Run `ruff format --check src tests scripts`, `ruff check src tests scripts`, and `pytest`.
 4. Run `knowledge-pack-studio --smoke-run` for an end-to-end offline check.
 5. Describe any schema, prompt, validation, credential, or rights impact in the pull request.
 

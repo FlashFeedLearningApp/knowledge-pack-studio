@@ -6,7 +6,20 @@ import hashlib
 import zipfile
 from pathlib import Path
 
-from .schema_loader import pack_schema_path
+from .schema_loader import schema_path
+
+AUDIT_SCHEMAS = (
+    "pack.schema.json",
+    "brief.schema.json",
+    "research-dossier.schema.json",
+    "evidence-ledger.schema.json",
+    "pack-design.schema.json",
+    "authored-items.schema.json",
+    "visual-plan.schema.json",
+    "validation-report.schema.json",
+    "semantic-review.schema.json",
+    "run-manifest.schema.json",
+)
 
 
 def _sha(path: Path) -> str:
@@ -29,8 +42,10 @@ def export_bundle(run_dir: Path, pack_id: str, publishable: bool) -> Path:
         "audit/image-ledger.json": run_dir / "visuals/image-ledger.json",
         "audit/validation-report.json": run_dir / "validation/validation-report.json",
         "audit/semantic-review.json": run_dir / "validation/semantic-review.json",
-        "audit/schema/pack.schema.json": pack_schema_path(),
     }
+    audit_files.update(
+        {f"audit/schema/{filename}": schema_path(filename) for filename in AUDIT_SCHEMAS}
+    )
     files: dict[str, Path] = {}
     for path in publishable_root.rglob("*"):
         if path.is_file():

@@ -8,4 +8,5 @@ dist/
 build/
 runs/
 .env
+.tools/
 .DS_Store
