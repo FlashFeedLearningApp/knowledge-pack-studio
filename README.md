@@ -15,10 +15,7 @@ required.
 
 ## Open in Colab
 
-The public badge will be enabled after this project is moved into its dedicated GitHub repository.
-The intended repository URL is:
-
-`https://github.com/FlashFeedLearningApp/knowledge-pack-studio`
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/FlashFeedLearningApp/knowledge-pack-studio/blob/main/notebooks/Knowledge_Pack_Studio.ipynb)
 
 The notebook is [`notebooks/Knowledge_Pack_Studio.ipynb`](notebooks/Knowledge_Pack_Studio.ipynb).
 
