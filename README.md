@@ -63,9 +63,12 @@ multiple keys select the Knowledge Pack credential explicitly. The Studio has no
 only reports whether the dedicated credential was connected when the app launched. For local use,
 set the environment variable `OPENAI_API_KEY_FF_KP` before launching the CLI. The standard notebook
 launches with `share=False`, so Gradio uses Colab's authenticated runtime
-proxy instead of creating a public `gradio.live` URL. No second Studio username or password is
-required. Anyone using the notebook runs it under their own Colab session and supplies their own
-key. An explicitly requested public Gradio share still requires `auth=(username, password)`.
+proxy instead of creating a public `gradio.live` URL. It also gives Gradio the full authenticated
+proxy URL so component stylesheets and scripts resolve through Colab rather than `localhost`.
+No second Studio username or password is required. Anyone using the notebook runs it under their
+own Colab session and supplies their own key. An explicitly requested public Gradio share still
+requires `auth=(username, password)`. The launch cell uses `debug=True` and intentionally remains
+running so technical server errors and logs appear below that cell; this is not an in-app setting.
 Credentials are never written into run artifacts, activity logs, or export bundles.
 
 ## Artifact layout

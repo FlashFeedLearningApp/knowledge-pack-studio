@@ -5,7 +5,9 @@ from __future__ import annotations
 import html
 import json
 import shutil
+import socket
 import tempfile
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -273,6 +275,70 @@ def _validate_share_auth(share: bool, auth: Any) -> None:
             "Public Gradio share links require authentication. Pass auth=(username, password) "
             "or launch locally with share=False."
         )
+
+
+def _available_local_port(start: int = 7860, attempts: int = 100) -> int:
+    """Reserve Gradio's public-facing port choice before asking Colab for its proxy URL."""
+
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
+            try:
+                candidate.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+        return port
+    raise RuntimeError(
+        f"No available local port found between {start} and {start + attempts - 1}. "
+        "Restart the Colab runtime and launch the Studio again."
+    )
+
+
+def _colab_proxy_url(port: int) -> str:
+    """Return the current user's authenticated Colab proxy origin for a kernel port."""
+
+    try:
+        from google.colab.output import eval_js
+
+        proxy_url = eval_js(f"google.colab.kernel.proxyPort({port}, {{cache: false}})")
+    except Exception as exc:
+        raise RuntimeError(
+            "Knowledge Pack Studio could not resolve Colab's authenticated runtime proxy. "
+            "Restart the runtime and run the notebook from the first cell."
+        ) from exc
+    if not isinstance(proxy_url, str) or not proxy_url.startswith("https://"):
+        raise RuntimeError(
+            "Colab returned an invalid private runtime URL. Restart the runtime and run the "
+            "notebook from the first cell."
+        )
+    return proxy_url.rstrip("/")
+
+
+def _prepare_launch_kwargs(
+    launch_kwargs: dict[str, Any],
+    *,
+    is_colab: bool,
+    share: bool,
+    proxy_url_getter: Callable[[int], str] = _colab_proxy_url,
+) -> dict[str, Any]:
+    """Make private Colab launches proxy-aware and keep notebook errors visible."""
+
+    prepared = dict(launch_kwargs)
+    if not is_colab or share:
+        return prepared
+
+    port = int(prepared.get("server_port") or _available_local_port())
+    prepared["server_port"] = port
+    # Colab's proxy does not always forward the public host headers Gradio needs
+    # to build static-asset URLs. A full root_path keeps component CSS and JS on
+    # the authenticated proxy origin instead of pointing them at localhost.
+    if "root_path" not in prepared:
+        prepared["root_path"] = proxy_url_getter(port).rstrip("/")
+    # Gradio otherwise prints an instruction to set debug=True with no obvious
+    # UI setting. In Colab this intentionally keeps the cell alive and forwards
+    # server tracebacks and logs below the launch cell.
+    prepared.setdefault("debug", True)
+    prepared.setdefault("height", 900)
+    return prepared
 
 
 def _mode_html(mock: bool) -> str:
@@ -1012,7 +1078,9 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             gr.Markdown(
                 "Download reproducibility metadata, stage errors, and textual run artifacts. "
                 "Credentials are not persisted and key patterns are redacted, but the bundle may "
-                "contain your topic, research, and source URLs."
+                "contain your topic, research, and source URLs. In Colab, technical server errors "
+                "and tracebacks also appear directly below the running **Launch Studio** cell; "
+                "the standard notebook enables that logging automatically."
             )
             with gr.Row():
                 activity_download_button = gr.Button("Download activity log (.jsonl)")
@@ -1175,6 +1243,11 @@ def launch(
         # a public gradio.live tunnel and lets Colab enforce notebook access.
         share = False
     _validate_share_auth(share, launch_kwargs.get("auth"))
+    launch_kwargs = _prepare_launch_kwargs(
+        launch_kwargs,
+        is_colab=gr.utils.colab_check(),
+        share=share,
+    )
     app = build_app(run_root, default_api_key=api_key)
     return app.launch(
         share=share,
