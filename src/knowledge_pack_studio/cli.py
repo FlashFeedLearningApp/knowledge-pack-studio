@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from .store import ArtifactStore
@@ -25,7 +26,12 @@ def main() -> None:
         print(workflow.store.load_manifest(run_id).final_bundle_path)
         return
     kwargs = {"server_port": args.server_port} if args.server_port else {}
-    launch(run_root=args.run_root, share=args.share, **kwargs)
+    launch(
+        api_key=os.environ.get("OPENAI_API_KEY_FF_KP"),
+        run_root=args.run_root,
+        share=args.share,
+        **kwargs,
+    )
 
 
 if __name__ == "__main__":
