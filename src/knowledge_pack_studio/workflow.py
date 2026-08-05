@@ -131,6 +131,14 @@ class StudioWorkflow:
         self._start(run_id, stage)
         try:
             idea = self.store.read_json(run_id, "idea.json")["idea"]
+            self.store.write_json(
+                run_id,
+                "intake",
+                "brief/intake.json",
+                intake,
+                self.store.artifact_hashes(run_id, "idea", "configuration"),
+                "requester",
+            )
             result, call = self._provider(run_id, credentials).clarify(idea, intake)
             result = self._apply_clarification_gates(result, intake)
             # The run date is execution metadata owned by deterministic code, not an LLM guess.
@@ -141,7 +149,7 @@ class StudioWorkflow:
                 "brief_draft",
                 "brief/brief-draft.json",
                 result.model_dump(mode="json"),
-                self.store.artifact_hashes(run_id, "idea", "configuration"),
+                self.store.artifact_hashes(run_id, "idea", "configuration", "intake"),
                 "clarifier",
             )
             self.store.set_stage(run_id, stage, StageState.WAITING_APPROVAL)

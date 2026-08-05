@@ -221,3 +221,26 @@ def test_notebook_interview_persists_required_outcome_and_approves(tmp_path):
     assert approved["requester_approved"] is True
     assert approved["requester_answers"][question.question_id] == question.suggested_answer
     assert studio.clarification_state()["answers"][question.question_id]
+
+
+def test_legacy_brief_is_upgraded_to_require_outcome_confirmation(tmp_path):
+    studio = NotebookStudio(tmp_path / "runs", echo_progress=False)
+    studio.create_run("Migrate this interview", mock=True)
+    studio.clarify(
+        {
+            "audience": "Adult beginners",
+            "desired_outcomes": ["Explain the original requested outcome"],
+        }
+    )
+    intake_path = studio.run_dir / "brief/intake.json"
+    intake_path.unlink()
+
+    questions = studio.clarification_questions()
+    required = next(row for row in questions if row["question_id"] == "required-learning-outcomes")
+    assert required["required"] is True
+    assert required["suggested_answer"]
+    persisted = studio.store.read_json(studio.current_run_id, "brief/brief-draft.json")
+    assert any(
+        row["question_id"] == "required-learning-outcomes"
+        for row in persisted["clarification_questions"]
+    )

@@ -110,8 +110,27 @@ class NotebookStudio:
         return self.workflow.clarify(self._run_id(run_id), intake, self.credentials)
 
     def clarification_questions(self, run_id: str | None = None) -> list[dict[str, Any]]:
-        draft = self.store.read_json(self._run_id(run_id), "brief/brief-draft.json")
-        return draft.get("clarification_questions", [])
+        selected = self._run_id(run_id)
+        raw_draft = self.store.read_json(selected, "brief/brief-draft.json")
+        from .models import BriefDraft
+
+        draft = BriefDraft.model_validate(raw_draft)
+        intake_path = self.store.run_dir(selected) / "brief/intake.json"
+        intake = (
+            self.store.read_json(selected, "brief/intake.json") if intake_path.is_file() else {}
+        )
+        upgraded = StudioWorkflow._apply_clarification_gates(draft, intake)
+        upgraded_data = upgraded.model_dump(mode="json")
+        if upgraded_data != raw_draft:
+            self.store.write_json(
+                selected,
+                "brief_draft",
+                "brief/brief-draft.json",
+                upgraded_data,
+                self.store.artifact_hashes(selected, "idea", "configuration", "intake"),
+                "clarification_migration",
+            )
+        return upgraded_data["clarification_questions"]
 
     def clarification_state(self, run_id: str | None = None) -> dict[str, Any]:
         selected = self._run_id(run_id)

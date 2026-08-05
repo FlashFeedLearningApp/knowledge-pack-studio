@@ -34,6 +34,7 @@ def export_bundle(run_dir: Path, pack_id: str, publishable: bool) -> Path:
     audit_files = {
         "audit/run-manifest.json": run_dir / "run-manifest.json",
         "audit/configuration.json": run_dir / "configuration.json",
+        "audit/intake.json": run_dir / "brief/intake.json",
         "audit/research-dossier.json": run_dir / "research/research-dossier.json",
         "audit/evidence-ledger.json": run_dir / "evidence/evidence-ledger.json",
         "audit/pack-design.json": run_dir / "design/pack-design.json",
