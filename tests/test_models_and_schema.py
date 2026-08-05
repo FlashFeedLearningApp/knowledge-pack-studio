@@ -23,7 +23,10 @@ def test_notebook_is_valid_and_has_colab_metadata():
     notebook = nbformat.read(notebook_path, as_version=4)
     nbformat.validate(notebook)
     assert notebook.metadata.colab.name == "Knowledge Pack Studio"
-    assert any("launch(api_key=api_key)" in "".join(cell.source) for cell in notebook.cells)
+    notebook_source = "\n".join("".join(cell.source) for cell in notebook.cells)
+    assert "launch(api_key=api_key)" in notebook_source
+    assert "COLAB_SECRET_NAME = 'OPENAI_API_KEY_FF_KP'" in notebook_source
+    assert "userdata.get('OPENAI_API_KEY')" not in notebook_source
 
 
 def test_item_shape_validation_rejects_incomplete_mcq():

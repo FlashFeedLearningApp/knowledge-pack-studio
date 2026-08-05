@@ -4,7 +4,9 @@ Knowledge Pack Studio uses bring-your-own-provider credentials.
 
 ## API keys
 
-- Prefer Colab Secrets for `OPENAI_API_KEY`.
+- Prefer the dedicated Colab Secret `OPENAI_API_KEY_FF_KP`.
+- The notebook intentionally does not fall back to `OPENAI_API_KEY`; authors with multiple keys
+  must select the Knowledge Pack credential explicitly.
 - A key entered in the Studio UI is masked and retained only in the active Python process.
 - Keys must never be written to run artifacts, notebooks, logs, traces, exported bundles, or Git.
 - Error artifacts record exception type and message; provider libraries and application code must
