@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "ValidationIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "note"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "path",
+        "message"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
+    },
+    "ValidationMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "item_count": {
+          "title": "Item Count",
+          "type": "integer"
+        },
+        "lesson_count": {
+          "default": 0,
+          "title": "Lesson Count",
+          "type": "integer"
+        },
+        "part_count": {
+          "default": 0,
+          "title": "Part Count",
+          "type": "integer"
+        },
+        "parts_per_lesson": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Parts Per Lesson",
+          "type": "object"
+        },
+        "items_per_part": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Items Per Part",
+          "type": "object"
+        },
+        "thin_part_count": {
+          "default": 0,
+          "title": "Thin Part Count",
+          "type": "integer"
+        },
+        "shape_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Shape Counts",
+          "type": "object"
+        },
+        "shape_ratios": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Shape Ratios",
+          "type": "object"
+        },
+        "evidence_coverage": {
+          "title": "Evidence Coverage",
+          "type": "number"
+        },
+        "part_assignment_coverage": {
+          "title": "Part Assignment Coverage",
+          "type": "number"
+        },
+        "visual_provenance_coverage": {
+          "title": "Visual Provenance Coverage",
+          "type": "number"
+        },
+        "source_count": {
+          "title": "Source Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_count",
+        "shape_counts",
+        "shape_ratios",
+        "evidence_coverage",
+        "part_assignment_coverage",
+        "visual_provenance_coverage",
+        "source_count"
+      ],
+      "title": "ValidationMetrics",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "validated_at": {
+      "title": "Validated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "hard_gates_passed": {
+      "title": "Hard Gates Passed",
+      "type": "boolean"
+    },
+    "publishable": {
+      "title": "Publishable",
+      "type": "boolean"
+    },
+    "mock_run": {
+      "title": "Mock Run",
+      "type": "boolean"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/ValidationMetrics"
+    }
+  },
+  "required": [
+    "validated_at",
+    "schema_version",
+    "hard_gates_passed",
+    "publishable",
+    "mock_run",
+    "issues",
+    "metrics"
+  ],
+  "title": "ValidationReport",
+  "type": "object"
+}

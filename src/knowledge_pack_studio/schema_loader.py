@@ -8,18 +8,24 @@ from pathlib import Path
 from typing import Any
 
 
-def pack_schema_path() -> Path:
-    installed = resources.files("knowledge_pack_studio").joinpath("schema/pack.schema.json")
+def schema_path(filename: str) -> Path:
+    if not filename.endswith(".schema.json") or "/" in filename or "\\" in filename:
+        raise ValueError("Schema filename must end in .schema.json")
+    installed = resources.files("knowledge_pack_studio").joinpath(f"schema/{filename}")
     try:
         candidate = Path(str(installed))
         if candidate.exists():
             return candidate
     except TypeError:
         pass
-    source_checkout = Path(__file__).resolve().parents[2] / "schema" / "pack.schema.json"
+    source_checkout = Path(__file__).resolve().parents[2] / "schema" / filename
     if source_checkout.exists():
         return source_checkout
-    raise FileNotFoundError("The pinned FlashFeed pack.schema.json could not be located")
+    raise FileNotFoundError(f"The bundled {filename} could not be located")
+
+
+def pack_schema_path() -> Path:
+    return schema_path("pack.schema.json")
 
 
 def load_pack_schema() -> dict[str, Any]:

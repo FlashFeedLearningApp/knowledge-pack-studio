@@ -1,0 +1,36 @@
+{
+  "name": "FlashFeed Knowledge Pack Studio",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "jupyter.askForKernelRestart": false
+      }
+    }
+  },
+  "secrets": {
+    "OPENAI_API_KEY_FF_KP": {
+      "description": "OpenAI API key used only by your Knowledge Pack Studio session."
+    },
+    "UNSPLASH_ACCESS_KEY": {
+      "description": "Optional Unsplash access key for source-first image acquisition."
+    },
+    "PEXELS_API_KEY": {
+      "description": "Optional Pexels API key for source-first image acquisition."
+    },
+    "SMITHSONIAN_API_KEY": {
+      "description": "Optional Smithsonian Open Access API key."
+    }
+  }
+}

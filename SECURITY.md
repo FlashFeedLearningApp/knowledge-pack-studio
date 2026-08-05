@@ -1,44 +1,43 @@
 # Security and credential handling
 
-Knowledge Pack Studio uses bring-your-own-provider credentials.
+Knowledge Pack Studio uses bring-your-own-provider credentials in the author's own runtime.
 
 ## API keys
 
-- Prefer the dedicated Colab Secret `OPENAI_API_KEY_FF_KP`.
+- Use the dedicated secret `OPENAI_API_KEY_FF_KP` in Colab, Codespaces, or the local environment.
 - The notebook intentionally does not fall back to `OPENAI_API_KEY`; authors with multiple keys
   must select the Knowledge Pack credential explicitly.
-- The Studio UI has no API-key input. It reports only whether the dedicated credential was
-  connected when the application launched.
-- Local CLI users may provide the same credential through the `OPENAI_API_KEY_FF_KP` environment
-  variable.
-- Keys must never be written to run artifacts, notebooks, logs, traces, exported bundles, or Git.
-- Error artifacts record exception type and message; provider libraries and application code must
-  redact credentials from exception text before public release.
-- Use a dedicated OpenAI project/key with appropriate spend limits for authoring.
-- Rotate a key immediately if it appears in notebook output or an exported artifact.
+- Optional visual-source keys are `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, and
+  `SMITHSONIAN_API_KEY`.
+- The notebook reports only whether credentials were connected; it never displays their values.
+- Keys must never be written to artifacts, notebooks, logs, traces, diagnostics, bundles, or Git.
+- Use dedicated provider projects with appropriate spend limits and rotate a key immediately if it
+  appears in output.
 
-## Colab-private access
+## Access boundary
 
-Keeping an API key in the Python process prevents credential persistence, but it does not control
-who may invoke that process. The standard notebook therefore launches Gradio with `share=False`.
-In Colab, Gradio embeds the application through `google.colab.kernel.proxyPort` after checking
-`google.colab.kernel.accessAllowed`; it does not create a public `gradio.live` tunnel. Access follows
-the current user's Colab notebook/runtime authorization, so no second Studio password is required.
-Close the runtime when finished and share the notebook—not a copied runtime-proxy URL.
+The standard interface is the notebook itself. Colab access follows the user's Google account and
+notebook/runtime permissions. Codespaces access follows the user's GitHub account and Codespace
+permissions. There is no public application URL, shared server, or second Studio password.
 
-## Explicit public sharing
+Share the public notebook or repository, not a live runtime, Codespace, secret, run folder, or
+requester document. Stop or delete compute when finished and download any artifacts that must be
+retained.
 
-Setting `share=True` creates a publicly reachable Gradio tunnel. The launcher refuses to create one
-unless `auth=(username, password)` is also supplied. Gradio's built-in login is a basic access layer,
-not enterprise authentication; use the private Colab flow for normal authoring.
+## Provider and subprocess boundary
 
-## Trust boundary
+Model calls originate from the author's runtime. The source-first image adapter creates a child
+process with only the credentials needed by its configured providers. Credentials are not placed on
+the command line. Review repository source and pinned revisions before entering keys; production
+use should install reviewed release tags rather than mutable branches.
 
-In Colab, model calls originate from the user's own runtime. The repository source and installed
-package should be reviewed before entering credentials. Pin notebook installs to a reviewed release
-tag rather than a mutable branch for production use.
+## Legacy interface
+
+The optional browser prototype is not installed or started by the standard notebook. Anyone who
+explicitly enables its public-share mode must also configure its built-in authentication. That
+prototype is retained for comparison, not recommended for ordinary authoring.
 
 ## Reporting
 
-Do not file a public issue containing a credential or sensitive source document. Revoke exposed
-credentials before reporting the defect.
+Do not file a public issue containing a credential, private source document, or unreviewed run
+diagnostic. Revoke exposed credentials before reporting the defect.

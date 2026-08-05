@@ -54,7 +54,7 @@ class PipelineProvider(Protocol):
     ) -> tuple[EvidenceLedger, AgentCallRecord]: ...
 
     def write_guide(
-        self, brief: ApprovedBrief, ledger: EvidenceLedger
+        self, brief: ApprovedBrief, ledger: EvidenceLedger, design: PackDesign | None = None
     ) -> tuple[str, AgentCallRecord]: ...
 
     def design(
@@ -279,13 +279,17 @@ class OpenAIProvider:
         )
 
     def write_guide(
-        self, brief: ApprovedBrief, ledger: EvidenceLedger
+        self, brief: ApprovedBrief, ledger: EvidenceLedger, design: PackDesign | None = None
     ) -> tuple[str, AgentCallRecord]:
         return self._text(
             "guide_author",
             prompts.GUIDE_AUTHOR,
             json.dumps(
-                {"brief": brief.model_dump(mode="json"), "ledger": ledger.model_dump(mode="json")},
+                {
+                    "brief": brief.model_dump(mode="json"),
+                    "ledger": ledger.model_dump(mode="json"),
+                    "curriculum_plan": design.model_dump(mode="json") if design else None,
+                },
                 indent=2,
             ),
         )
@@ -543,7 +547,7 @@ class MockProvider:
         )
 
     def write_guide(
-        self, brief: ApprovedBrief, ledger: EvidenceLedger
+        self, brief: ApprovedBrief, ledger: EvidenceLedger, design: PackDesign | None = None
     ) -> tuple[str, AgentCallRecord]:
         guide = """# How Honey Bees Communicate
 
@@ -573,7 +577,7 @@ testable communication system. He shared the 1973 Nobel Prize in Physiology or M
             pack_id=brief.pack_id,
             pack_name="How Honey Bees Communicate",
             description="A compact introduction to the waggle dance and how scientists decoded it.",
-            target_item_count=8,
+            target_item_count=12,
             target_shape_ratios={
                 "fact": 0.25,
                 "definition": 0.25,
@@ -595,6 +599,7 @@ testable communication system. He shared the 1973 Nobel Prize in Physiology or M
                             guide_heading="Reading the dance",
                             guide_anchor="reading-the-dance",
                             claim_ids=["claim-dance-purpose", "claim-angle"],
+                            target_item_count=6,
                             planned_shapes=["fact", "definition", "pair", "mcq"],
                             visual_opportunities=["Diagram showing angle relative to the sun"],
                         ),
@@ -605,6 +610,7 @@ testable communication system. He shared the 1973 Nobel Prize in Physiology or M
                             guide_heading="How it was decoded",
                             guide_anchor="how-it-was-decoded",
                             claim_ids=["claim-frisch"],
+                            target_item_count=6,
                             planned_shapes=["fact", "definition", "mcq", "numeric"],
                             visual_opportunities=[],
                         ),
@@ -729,7 +735,7 @@ testable communication system. He shared the 1973 Nobel Prize in Physiology or M
             briefs=[
                 VisualBrief(
                     asset_id="asset-waggle-angle",
-                    item_id="fact-waggle-purpose",
+                    item_ids=["fact-waggle-purpose"],
                     teaching_purpose="Show how dance orientation maps to resource direction",
                     kind="diagram",
                     prompt="Draw a clean educational diagram of a honeycomb, a vertical waggle run, the sun, and a food source, with simple arrows and no decorative text.",

@@ -13,5 +13,7 @@ The upstream Zod schema is authoritative. This JSON Schema covers portable struc
 application validators must additionally check uniqueness, item references, part assignments,
 answer indices, files, provenance, and semantic quality.
 
-`brief.schema.json` and `evidence-ledger.schema.json` are generated from this application's Pydantic
-artifact models. Regenerate them with `python scripts/export_pipeline_schemas.py`.
+The other `*.schema.json` files are generated from the application's strict Pydantic artifact
+models and cover the approved brief, research dossier, evidence ledger, curriculum/pack design,
+authored items, visual plan, validation report, semantic review, and resumable run manifest.
+Regenerate them with `python scripts/export_pipeline_schemas.py`.

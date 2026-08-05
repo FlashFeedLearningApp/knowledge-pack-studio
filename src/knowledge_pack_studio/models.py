@@ -22,6 +22,7 @@ class ClarificationQuestion(StrictModel):
     question: str
     why_it_matters: str
     required: bool = True
+    suggested_answer: str = ""
 
 
 class BriefDraft(StrictModel):
@@ -122,6 +123,7 @@ class PartPlan(StrictModel):
     guide_heading: str
     guide_anchor: str
     claim_ids: list[str]
+    target_item_count: int = Field(default=8, ge=6, le=10)
     planned_shapes: list[Literal["fact", "definition", "pair", "mcq", "numeric", "procedure"]]
     visual_opportunities: list[str]
 
@@ -130,7 +132,7 @@ class LessonPlan(StrictModel):
     lesson_id: str
     title: str
     rationale: str
-    parts: list[PartPlan]
+    parts: list[PartPlan] = Field(min_length=2, max_length=4)
 
 
 class ShapeRatioTargets(StrictModel):
@@ -148,9 +150,9 @@ class PackDesign(StrictModel):
     pack_id: str
     pack_name: str
     description: str
-    target_item_count: int
+    target_item_count: int = Field(ge=12, le=240)
     target_shape_ratios: ShapeRatioTargets
-    lessons: list[LessonPlan]
+    lessons: list[LessonPlan] = Field(min_length=1, max_length=12)
     coverage_gaps: list[str]
     topic_flex_exclusions: list[str]
 
@@ -209,13 +211,25 @@ class AuthoredItems(StrictModel):
 
 class VisualBrief(StrictModel):
     asset_id: str
-    item_id: str
+    item_ids: list[str] = Field(min_length=1)
     teaching_purpose: str
     kind: Literal["photo", "diagram", "map", "chart", "scrapbook"]
     prompt: str
-    search_term: str
-    alt_text: str
+    search_term: str = Field(min_length=2)
+    alt_text: str = Field(min_length=1, max_length=200)
     generate: bool
+
+    @model_validator(mode="before")
+    @classmethod
+    def upgrade_legacy_item_id(cls, data):
+        """Read v0.1 plans while emitting only the v0.2 one-to-many contract."""
+
+        if isinstance(data, dict) and "item_ids" not in data and "item_id" in data:
+            upgraded = dict(data)
+            raw = str(upgraded.pop("item_id"))
+            upgraded["item_ids"] = [value.strip() for value in raw.split(",") if value.strip()]
+            return upgraded
+        return data
 
 
 class VisualPlan(StrictModel):
@@ -245,6 +259,11 @@ class ValidationIssue(StrictModel):
 
 class ValidationMetrics(StrictModel):
     item_count: int
+    lesson_count: int = 0
+    part_count: int = 0
+    parts_per_lesson: dict[str, int] = Field(default_factory=dict)
+    items_per_part: dict[str, int] = Field(default_factory=dict)
+    thin_part_count: int = 0
     shape_counts: dict[str, int]
     shape_ratios: dict[str, float]
     evidence_coverage: float

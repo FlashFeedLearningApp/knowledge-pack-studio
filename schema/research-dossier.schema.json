@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "ResearchSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "author_or_institution": {
+          "default": "Unknown",
+          "title": "Author Or Institution",
+          "type": "string"
+        },
+        "publication_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publication Date"
+        },
+        "retrieved_at": {
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "primary",
+            "secondary",
+            "tertiary",
+            "requester-provided"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        }
+      },
+      "required": [
+        "source_id",
+        "title",
+        "url",
+        "retrieved_at",
+        "source_type"
+      ],
+      "title": "ResearchSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "topic": {
+      "title": "Topic",
+      "type": "string"
+    },
+    "report_markdown": {
+      "title": "Report Markdown",
+      "type": "string"
+    },
+    "queries": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Queries",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/ResearchSource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "provided_files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Provided Files",
+      "type": "array"
+    },
+    "unresolved_questions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unresolved Questions",
+      "type": "array"
+    },
+    "response_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Response Id"
+    },
+    "mock": {
+      "default": false,
+      "title": "Mock",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "topic",
+    "report_markdown",
+    "queries",
+    "sources",
+    "provided_files",
+    "unresolved_questions"
+  ],
+  "title": "ResearchDossier",
+  "type": "object"
+}

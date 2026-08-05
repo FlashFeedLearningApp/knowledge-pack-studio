@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "AgentCallRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "agent": {
+          "title": "Agent",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "credential_profile": {
+          "title": "Credential Profile",
+          "type": "string"
+        },
+        "response_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Id"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "tool_calls": {
+          "default": 0,
+          "title": "Tool Calls",
+          "type": "integer"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "agent",
+        "model",
+        "credential_profile",
+        "created_at"
+      ],
+      "title": "AgentCallRecord",
+      "type": "object"
+    },
+    "ArtifactRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "relative_path": {
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "producer": {
+          "title": "Producer",
+          "type": "string"
+        },
+        "input_hashes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Hashes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "relative_path",
+        "sha256",
+        "created_at",
+        "producer",
+        "input_hashes"
+      ],
+      "title": "ArtifactRecord",
+      "type": "object"
+    },
+    "RunEvent": {
+      "additionalProperties": false,
+      "description": "A persisted, user-readable activity entry for a pipeline run.",
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/StageState"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "required": [
+        "at",
+        "stage",
+        "state",
+        "message"
+      ],
+      "title": "RunEvent",
+      "type": "object"
+    },
+    "StageState": {
+      "enum": [
+        "not_started",
+        "running",
+        "waiting_approval",
+        "complete",
+        "failed",
+        "stale"
+      ],
+      "title": "StageState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "title": "Updated At",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "pipeline_version": {
+      "title": "Pipeline Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string"
+    },
+    "mock": {
+      "title": "Mock",
+      "type": "boolean"
+    },
+    "stages": {
+      "additionalProperties": {
+        "$ref": "#/$defs/StageState"
+      },
+      "title": "Stages",
+      "type": "object"
+    },
+    "artifacts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ArtifactRecord"
+      },
+      "title": "Artifacts",
+      "type": "object"
+    },
+    "agent_calls": {
+      "items": {
+        "$ref": "#/$defs/AgentCallRecord"
+      },
+      "title": "Agent Calls",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/RunEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "final_pack_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Pack Id"
+    },
+    "final_bundle_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Bundle Path"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "updated_at",
+    "status",
+    "pipeline_version",
+    "schema_version",
+    "provider",
+    "mock",
+    "stages",
+    "artifacts",
+    "agent_calls"
+  ],
+  "title": "RunManifest",
+  "type": "object"
+}

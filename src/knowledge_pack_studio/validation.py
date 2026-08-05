@@ -68,7 +68,11 @@ def validate_pack(
         )
 
     assigned_ids: list[str] = []
+    parts_per_lesson: dict[str, int] = {}
+    items_per_part: dict[str, int] = {}
     for lesson in pack.get("lessons", []):
+        lesson_id = lesson.get("id", "unknown")
+        parts_per_lesson[lesson_id] = len(lesson.get("parts", []))
         guide = lesson.get("studyGuidePath")
         if guide and not (run_dir / "publishable" / pack["packId"] / guide).is_file():
             issues.append(
@@ -80,7 +84,37 @@ def validate_pack(
                 )
             )
         for part in lesson.get("parts", []):
-            for item_id in part.get("itemIds", []):
+            part_id = part.get("id", "unknown")
+            part_item_ids = part.get("itemIds", [])
+            items_per_part[part_id] = len(part_item_ids)
+            if not part_item_ids:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        code="EMPTY_PART",
+                        path=f"$.lessons[{lesson_id}].parts[{part_id}].itemIds",
+                        message="Every part must contain authored learning items.",
+                    )
+                )
+            elif len(part_item_ids) < 6:
+                issues.append(
+                    ValidationIssue(
+                        severity="warning",
+                        code="THIN_PART",
+                        path=f"$.lessons[{lesson_id}].parts[{part_id}].itemIds",
+                        message=f"Part has {len(part_item_ids)} items; the preferred band is 6–10.",
+                    )
+                )
+            elif len(part_item_ids) > 10:
+                issues.append(
+                    ValidationIssue(
+                        severity="warning",
+                        code="OVERSIZED_PART",
+                        path=f"$.lessons[{lesson_id}].parts[{part_id}].itemIds",
+                        message=f"Part has {len(part_item_ids)} items; the preferred band is 6–10.",
+                    )
+                )
+            for item_id in part_item_ids:
                 assigned_ids.append(item_id)
                 if item_id not in item_ids:
                     issues.append(
@@ -174,6 +208,11 @@ def validate_pack(
     ]
     metrics = ValidationMetrics(
         item_count=item_count,
+        lesson_count=len(pack.get("lessons", [])),
+        part_count=sum(parts_per_lesson.values()),
+        parts_per_lesson=parts_per_lesson,
+        items_per_part=items_per_part,
+        thin_part_count=sum(1 for count in items_per_part.values() if count < 6),
         shape_counts=dict(sorted(shape_counts.items())),
         shape_ratios=shape_ratios,
         evidence_coverage=round(claimed_items / len(authored.items), 4) if authored.items else 0.0,

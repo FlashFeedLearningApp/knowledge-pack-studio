@@ -846,16 +846,14 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 snapshot["load_status"] = "✅ Evidence ledger complete."
                 yield snapshot_values(snapshot)
             if wants_guide:
-                progress(0.4, desc="Writing the guide and blueprint…")
-                workflow.write_guide(run_id, credentials())
-                snapshot = _run_snapshot(store, run_id)
-                snapshot["load_status"] = (
-                    "✅ Learner-facing study guide complete. Building the blueprint."
-                )
-                yield snapshot_values(snapshot)
+                progress(0.4, desc="Planning the curriculum and writing the guide…")
                 workflow.design(run_id, credentials())
                 snapshot = _run_snapshot(store, run_id)
                 snapshot["load_status"] = "✅ Lesson and item blueprint complete."
+                yield snapshot_values(snapshot)
+                workflow.write_guide(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Learner-facing study guide complete."
                 yield snapshot_values(snapshot)
             if wants_author:
                 progress(0.6, desc="Authoring items and planning visuals…")
