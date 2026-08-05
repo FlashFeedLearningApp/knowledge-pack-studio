@@ -147,6 +147,19 @@ def _mode_html(mock: bool) -> str:
     )
 
 
+def _credential_markdown(connected: bool) -> str:
+    if connected:
+        return (
+            "✅ **OpenAI credential connected** from `OPENAI_API_KEY_FF_KP`. "
+            "The key is not exposed to the browser or Gradio callbacks."
+        )
+    return (
+        "⚠️ **No OpenAI credential connected.** Mock mode works normally; live mode requires "
+        "the Colab Secret or local environment variable `OPENAI_API_KEY_FF_KP`, followed by a "
+        "runtime restart."
+    )
+
+
 def _questions_markdown(brief: dict[str, Any] | None) -> str:
     if not brief:
         return ""
@@ -314,8 +327,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
     author_progress = gr.Progress()
     lucky_progress = gr.Progress()
 
-    def credentials(entered_key: str) -> dict[str, str]:
-        key = (entered_key or default_api_key or "").strip()
+    def credentials() -> dict[str, str]:
+        key = (default_api_key or "").strip()
         return {"default": key} if key else {}
 
     def create_and_clarify(
@@ -325,7 +338,6 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         constraints: str,
         config_json: str,
         mock: bool,
-        api_key: str,
     ):
         config = StudioConfig.model_validate_json(config_json)
         run_id = workflow.create_run(idea, config=config, mock=mock)
@@ -334,7 +346,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             "desired_outcomes": _lines(outcomes),
             "constraints": _lines(constraints),
         }
-        brief = workflow.clarify(run_id, intake, credentials(api_key))
+        brief = workflow.clarify(run_id, intake, credentials())
         questions = _questions_markdown(brief.model_dump(mode="json"))
         return (
             run_id,
@@ -350,10 +362,10 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         brief = workflow.approve_brief(run_id, answers)
         return _json(brief), _flow_html(store, run_id)
 
-    def run_research(run_id: str, api_key: str, source_urls: str, files: Any):
+    def run_research(run_id: str, source_urls: str, files: Any):
         run_id = _require_run(run_id)
         urls = _lines(source_urls)
-        dossier = workflow.research(run_id, credentials(api_key), urls, _file_paths(files))
+        dossier = workflow.research(run_id, credentials(), urls, _file_paths(files))
         source_table = [
             [
                 source.source_id,
@@ -367,16 +379,16 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         ]
         return dossier.report_markdown, source_table, _flow_html(store, run_id)
 
-    def run_extraction(run_id: str, api_key: str):
+    def run_extraction(run_id: str):
         run_id = _require_run(run_id)
-        ledger = workflow.extract(run_id, credentials(api_key))
+        ledger = workflow.extract(run_id, credentials())
         return _json(ledger), _flow_html(store, run_id)
 
-    def run_guide(run_id: str, api_key: str, progress=guide_progress):
+    def run_guide(run_id: str, progress=guide_progress):
         run_id = _require_run(run_id)
         progress(0.1, desc="Preparing the approved evidence…")
         try:
-            guide = workflow.write_guide(run_id, credentials(api_key))
+            guide = workflow.write_guide(run_id, credentials())
             progress(1.0, desc="Study guide complete")
             return guide, "✅ Study guide complete.", _flow_html(store, run_id)
         except Exception as exc:
@@ -388,11 +400,11 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 _flow_html(store, run_id),
             )
 
-    def run_design(run_id: str, api_key: str, progress=design_progress):
+    def run_design(run_id: str, progress=design_progress):
         run_id = _require_run(run_id)
         progress(0.1, desc="Mapping guide sections to pack parts…")
         try:
-            design = workflow.design(run_id, credentials(api_key))
+            design = workflow.design(run_id, credentials())
             progress(1.0, desc="Lesson and item blueprint complete")
             return (
                 _json(design),
@@ -408,11 +420,11 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 _flow_html(store, run_id),
             )
 
-    def run_author(run_id: str, api_key: str, progress=author_progress):
+    def run_author(run_id: str, progress=author_progress):
         run_id = _require_run(run_id)
         progress(0.1, desc="Drafting evidence-linked seed items…")
         try:
-            items = workflow.author(run_id, credentials(api_key))
+            items = workflow.author(run_id, credentials())
             progress(1.0, desc="Seed items complete")
             return (
                 _json(items),
@@ -428,14 +440,14 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 _flow_html(store, run_id),
             )
 
-    def run_visual_plan(run_id: str, api_key: str):
+    def run_visual_plan(run_id: str):
         run_id = _require_run(run_id)
-        plan = workflow.plan_visuals(run_id, credentials(api_key))
+        plan = workflow.plan_visuals(run_id, credentials())
         return _json(plan), _flow_html(store, run_id)
 
-    def run_images(run_id: str, api_key: str):
+    def run_images(run_id: str):
         run_id = _require_run(run_id)
-        ledger = workflow.generate_images(run_id, credentials(api_key))
+        ledger = workflow.generate_images(run_id, credentials())
         return _json(ledger), _flow_html(store, run_id)
 
     def run_validation(run_id: str):
@@ -443,9 +455,9 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         report = workflow.validate(run_id)
         return _json(report), _flow_html(store, run_id)
 
-    def run_review(run_id: str, api_key: str):
+    def run_review(run_id: str):
         run_id = _require_run(run_id)
-        review = workflow.semantic_review(run_id, credentials(api_key))
+        review = workflow.semantic_review(run_id, credentials())
         report = store.read_json(run_id, "validation/validation-report.json")
         return _json(review), _json(report), _flow_html(store, run_id)
 
@@ -514,7 +526,6 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         constraints: str,
         config_json: str,
         mock: bool,
-        api_key: str,
         source_urls: str,
         files: Any,
         auto_approve: bool,
@@ -530,7 +541,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         }
         try:
             progress(0.05, desc="Clarifying the idea…")
-            workflow.clarify(run_id, intake, credentials(api_key))
+            workflow.clarify(run_id, intake, credentials())
             if not auto_approve:
                 snapshot = _run_snapshot(store, run_id)
                 snapshot["load_status"] = (
@@ -551,23 +562,23 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             if wants_research:
                 progress(0.15, desc="Researching and extracting evidence…")
                 urls = _lines(source_urls)
-                workflow.research(run_id, credentials(api_key), urls, _file_paths(files))
-                workflow.extract(run_id, credentials(api_key))
+                workflow.research(run_id, credentials(), urls, _file_paths(files))
+                workflow.extract(run_id, credentials())
             if wants_guide:
                 progress(0.4, desc="Writing the guide and blueprint…")
-                workflow.write_guide(run_id, credentials(api_key))
-                workflow.design(run_id, credentials(api_key))
+                workflow.write_guide(run_id, credentials())
+                workflow.design(run_id, credentials())
             if wants_author:
                 progress(0.6, desc="Authoring items and planning visuals…")
-                workflow.author(run_id, credentials(api_key))
-                workflow.plan_visuals(run_id, credentials(api_key))
+                workflow.author(run_id, credentials())
+                workflow.plan_visuals(run_id, credentials())
             if wants_images:
                 progress(0.75, desc="Generating planned images…")
-                workflow.generate_images(run_id, credentials(api_key))
+                workflow.generate_images(run_id, credentials())
             if wants_review:
                 progress(0.85, desc="Validating and reviewing…")
                 workflow.validate(run_id)
-                workflow.semantic_review(run_id, credentials(api_key))
+                workflow.semantic_review(run_id, credentials())
             if wants_export:
                 progress(0.95, desc="Building the export bundle…")
                 workflow.export(run_id)
@@ -630,11 +641,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             load_button = gr.Button("Load", scale=1)
         with gr.Accordion("Provider and model settings — verify before starting", open=True):
             with gr.Row():
-                api_key = gr.Textbox(
-                    label="OpenAI API key",
-                    type="password",
-                    placeholder="Stored only in this active UI session",
-                )
+                gr.Markdown(_credential_markdown(bool(default_api_key)), elem_classes="kp-status")
                 mock_mode = gr.Checkbox(
                     label="MOCK demonstration mode — simulated output; cannot publish", value=True
                 )
@@ -774,16 +781,16 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
 
         create_button.click(
             create_and_clarify,
-            [idea, audience, outcomes, constraints, config_json, mock_mode, api_key],
+            [idea, audience, outcomes, constraints, config_json, mock_mode],
             [run_id, recent, brief_draft, questions, flow],
         )
         approve_button.click(approve, [run_id, answers], [approved_brief, flow])
         research_button.click(
             run_research,
-            [run_id, api_key, source_urls, uploads],
+            [run_id, source_urls, uploads],
             [research_report, source_table, flow],
         )
-        extraction_button.click(run_extraction, [run_id, api_key], [evidence_json, flow])
+        extraction_button.click(run_extraction, [run_id], [evidence_json, flow])
         guide_start = guide_button.click(
             lambda: "⏳ Writing the learner-facing study guide…",
             outputs=guide_status,
@@ -791,7 +798,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         )
         guide_start.then(
             run_guide,
-            [run_id, api_key],
+            [run_id],
             [guide_markdown, guide_status, flow],
             show_progress="full",
             show_progress_on=guide_status,
@@ -803,7 +810,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         )
         design_start.then(
             run_design,
-            [run_id, api_key],
+            [run_id],
             [design_json, design_status, flow],
             show_progress="full",
             show_progress_on=design_status,
@@ -815,17 +822,17 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         )
         author_start.then(
             run_author,
-            [run_id, api_key],
+            [run_id],
             [items_json, author_status, flow],
             show_progress="full",
             show_progress_on=author_status,
         )
-        visual_button.click(run_visual_plan, [run_id, api_key], [visual_json, flow])
-        image_button.click(run_images, [run_id, api_key], [image_json, flow])
+        visual_button.click(run_visual_plan, [run_id], [visual_json, flow])
+        image_button.click(run_images, [run_id], [image_json, flow])
         validate_button.click(run_validation, [run_id], [validation_json, flow])
         review_button.click(
             run_review,
-            [run_id, api_key],
+            [run_id],
             [review_json, validation_json, flow],
         )
         export_button.click(run_export, [run_id], [bundle_file, flow])
@@ -869,7 +876,6 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 constraints,
                 config_json,
                 mock_mode,
-                api_key,
                 source_urls,
                 uploads,
                 lucky_auto_approve,

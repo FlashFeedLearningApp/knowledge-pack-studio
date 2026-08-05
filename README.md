@@ -55,12 +55,13 @@ pytest
 knowledge-pack-studio
 ```
 
-Mock mode does not need an API key. For live use, enter a key into the masked Studio field or add
-`OPENAI_API_KEY_FF_KP` to Colab Secrets. The notebook intentionally does not fall back to a generic
-OpenAI secret, which helps authors with multiple keys select the Knowledge Pack credential
-explicitly. Also add `FF_KP_STUDIO_PASSWORD`; the temporary Gradio share link uses the username
-`ff-kp-author` and that password. Keys and passwords are never written into run artifacts or export
-bundles.
+Mock mode does not need an API key. For live Colab use, add `OPENAI_API_KEY_FF_KP` to Colab Secrets.
+The notebook intentionally does not fall back to a generic OpenAI secret, which helps authors with
+multiple keys select the Knowledge Pack credential explicitly. The Studio has no API-key input: it
+only reports whether the dedicated credential was connected when the app launched. For local use,
+set the environment variable `OPENAI_API_KEY_FF_KP` before launching the CLI. Also add
+`FF_KP_STUDIO_PASSWORD`; the temporary Gradio share link uses the username `ff-kp-author` and that
+password. Keys and passwords are never written into run artifacts or export bundles.
 
 ## Artifact layout
 

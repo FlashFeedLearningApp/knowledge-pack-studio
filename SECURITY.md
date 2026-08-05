@@ -8,7 +8,10 @@ Knowledge Pack Studio uses bring-your-own-provider credentials.
 - Store a strong, unique Gradio password in the Colab Secret `FF_KP_STUDIO_PASSWORD`.
 - The notebook intentionally does not fall back to `OPENAI_API_KEY`; authors with multiple keys
   must select the Knowledge Pack credential explicitly.
-- A key entered in the Studio UI is masked and retained only in the active Python process.
+- The Studio UI has no API-key input. It reports only whether the dedicated credential was
+  connected when the application launched.
+- Local CLI users may provide the same credential through the `OPENAI_API_KEY_FF_KP` environment
+  variable.
 - Keys must never be written to run artifacts, notebooks, logs, traces, exported bundles, or Git.
 - Error artifacts record exception type and message; provider libraries and application code must
   redact credentials from exception text before public release.
