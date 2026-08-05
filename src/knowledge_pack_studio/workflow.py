@@ -25,7 +25,7 @@ from .models import (
 from .pack_builder import build_pack
 from .packaging import export_bundle
 from .provider import MockProvider, OpenAIProvider, PipelineProvider
-from .store import ArtifactStore
+from .store import STAGE_NAMES, ArtifactStore
 from .validation import validate_pack
 
 
@@ -53,6 +53,18 @@ class StudioWorkflow:
         if manifest.mock:
             return MockProvider(config)
         return OpenAIProvider(config, credentials)
+
+    def _require(
+        self,
+        run_id: str,
+        stage: str,
+        *requirements: tuple[str, str],
+    ) -> None:
+        """Fail clearly before starting a stage when a prerequisite artifact is absent."""
+
+        for relative_path, instruction in requirements:
+            if not (self.store.run_dir(run_id) / relative_path).is_file():
+                raise RuntimeError(f"{STAGE_NAMES[stage]} is blocked. {instruction}")
 
     def _start(self, run_id: str, stage: str) -> None:
         self.store.invalidate_downstream(run_id, stage)
@@ -104,6 +116,11 @@ class StudioWorkflow:
 
     def approve_brief(self, run_id: str, answers: dict[str, str]) -> ApprovedBrief:
         stage = "brief_approval"
+        self._require(
+            run_id,
+            stage,
+            ("brief/brief-draft.json", "Run the idea-clarification section first."),
+        )
         self._start(run_id, stage)
         try:
             draft = BriefDraft.model_validate(
@@ -148,6 +165,15 @@ class StudioWorkflow:
         file_paths: list[Path] | None = None,
     ) -> ResearchDossier:
         stage = "research"
+        self._require(
+            run_id,
+            stage,
+            (
+                "brief/approved-brief.json",
+                "Return to notebook section 3, set APPROVE_BRIEF to True, answer every "
+                "required question, and rerun that cell.",
+            ),
+        )
         self._start(run_id, stage)
         try:
             brief = ApprovedBrief.model_validate(
@@ -175,6 +201,12 @@ class StudioWorkflow:
 
     def extract(self, run_id: str, credentials: dict[str, str]) -> EvidenceLedger:
         stage = "extraction"
+        self._require(
+            run_id,
+            stage,
+            ("brief/approved-brief.json", "Approve the brief before extracting evidence."),
+            ("research/research-dossier.json", "Complete grounded research first."),
+        )
         self._start(run_id, stage)
         try:
             brief = ApprovedBrief.model_validate(
@@ -201,6 +233,12 @@ class StudioWorkflow:
 
     def write_guide(self, run_id: str, credentials: dict[str, str]) -> str:
         stage = "study_guide"
+        self._require(
+            run_id,
+            stage,
+            ("brief/approved-brief.json", "Approve the brief first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+        )
         self._start(run_id, stage)
         try:
             brief = ApprovedBrief.model_validate(
@@ -235,6 +273,12 @@ class StudioWorkflow:
 
     def design(self, run_id: str, credentials: dict[str, str]) -> PackDesign:
         stage = "pack_design"
+        self._require(
+            run_id,
+            stage,
+            ("brief/approved-brief.json", "Approve the brief first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+        )
         self._start(run_id, stage)
         try:
             brief = ApprovedBrief.model_validate(
@@ -263,6 +307,13 @@ class StudioWorkflow:
 
     def author(self, run_id: str, credentials: dict[str, str]) -> AuthoredItems:
         stage = "item_authoring"
+        self._require(
+            run_id,
+            stage,
+            ("design/pack-design.json", "Complete the curriculum blueprint first."),
+            ("guide/study-guide.md", "Complete the learner-facing study guide first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+        )
         self._start(run_id, stage)
         try:
             brief = ApprovedBrief.model_validate(
@@ -293,6 +344,13 @@ class StudioWorkflow:
 
     def plan_visuals(self, run_id: str, credentials: dict[str, str]) -> VisualPlan:
         stage = "visual_planning"
+        self._require(
+            run_id,
+            stage,
+            ("design/pack-design.json", "Complete the curriculum blueprint first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+        )
         self._start(run_id, stage)
         try:
             ledger = EvidenceLedger.model_validate(
@@ -322,6 +380,12 @@ class StudioWorkflow:
 
     def generate_images(self, run_id: str, credentials: dict[str, str]) -> dict[str, Any]:
         stage = "image_generation"
+        self._require(
+            run_id,
+            stage,
+            ("visuals/visual-plan.json", "Complete visual planning first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+        )
         self._start(run_id, stage)
         try:
             preflight = self.preflight(run_id)
@@ -438,6 +502,12 @@ class StudioWorkflow:
         """Acquire visuals through Image Source-cery with search before generation."""
 
         stage = "image_generation"
+        self._require(
+            run_id,
+            stage,
+            ("visuals/visual-plan.json", "Complete visual planning first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+        )
         self._start(run_id, stage)
         try:
             preflight = self.preflight(run_id)
@@ -625,6 +695,16 @@ class StudioWorkflow:
     def preflight(self, run_id: str) -> ValidationReport:
         """Validate structure and evidence before optional image generation can spend money."""
 
+        self._require(
+            run_id,
+            "validation",
+            ("brief/approved-brief.json", "Approve the brief first."),
+            ("research/research-dossier.json", "Complete grounded research first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+            ("design/pack-design.json", "Complete the curriculum blueprint first."),
+            ("guide/study-guide.md", "Complete the learner-facing study guide first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+        )
         pack = self._build_consumer_pack(run_id, include_images=False)
         ledger = EvidenceLedger.model_validate(
             self.store.read_json(run_id, "evidence/evidence-ledger.json")
@@ -667,6 +747,16 @@ class StudioWorkflow:
 
     def validate(self, run_id: str) -> ValidationReport:
         stage = "validation"
+        self._require(
+            run_id,
+            stage,
+            ("brief/approved-brief.json", "Approve the brief first."),
+            ("research/research-dossier.json", "Complete grounded research first."),
+            ("evidence/evidence-ledger.json", "Complete evidence extraction first."),
+            ("design/pack-design.json", "Complete the curriculum blueprint first."),
+            ("guide/study-guide.md", "Complete the learner-facing study guide first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+        )
         self._start(run_id, stage)
         try:
             pack = self._build_consumer_pack(run_id)
@@ -709,6 +799,13 @@ class StudioWorkflow:
 
     def semantic_review(self, run_id: str, credentials: dict[str, str]) -> SemanticReview:
         stage = "semantic_review"
+        self._require(
+            run_id,
+            stage,
+            ("validation/validation-report.json", "Complete deterministic validation first."),
+            ("items/authored-items.json", "Complete item authoring first."),
+            ("guide/study-guide.md", "Complete the learner-facing study guide first."),
+        )
         self._start(run_id, stage)
         try:
             ledger = EvidenceLedger.model_validate(
@@ -753,6 +850,12 @@ class StudioWorkflow:
 
     def export(self, run_id: str) -> Path:
         stage = "export"
+        self._require(
+            run_id,
+            stage,
+            ("validation/validation-report.json", "Complete deterministic validation first."),
+            ("validation/semantic-review.json", "Complete independent semantic review first."),
+        )
         self._start(run_id, stage)
         try:
             design = PackDesign.model_validate(

@@ -167,6 +167,20 @@ def test_required_clarification_answers_cannot_be_auto_approved(tmp_path):
         workflow.approve_brief(run_id, {})
 
 
+def test_research_missing_approval_fails_before_the_stage_starts(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.create_run("Prerequisite gate", mock=True)
+    workflow.clarify(run_id, {}, {})
+
+    with pytest.raises(RuntimeError, match="section 3.*APPROVE_BRIEF"):
+        workflow.research(run_id, {})
+
+    manifest = store.load_manifest(run_id)
+    assert manifest.stages["research"].value == "not_started"
+    assert not (store.run_dir(run_id) / "errors/research.json").exists()
+
+
 def test_notebook_facade_resumes_artifacts_and_reports_progress(tmp_path):
     first = NotebookStudio(tmp_path / "runs", echo_progress=False)
     run_id = first.workflow.run_all_mock("Notebook resume test")

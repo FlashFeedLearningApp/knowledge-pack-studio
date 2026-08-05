@@ -310,7 +310,12 @@ def main() -> None:
                 display(JSON(approved.model_dump(mode="json"), expanded=False))
                 print("Brief approved. Continue to grounded research.")
             else:
-                print("Approval is OFF. Review the brief, then set APPROVE_BRIEF to True and re-run.")
+                display(
+                    Markdown(
+                        "> **STOP — the brief is not approved.** Review it, set "
+                        "`APPROVE_BRIEF = True`, and rerun this cell before continuing to research."
+                    )
+                )
             studio.show_status()
             """
         ),
