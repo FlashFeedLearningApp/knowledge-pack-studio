@@ -133,32 +133,51 @@ def main() -> None:
         code(
             """
             # @title Create this notebook session
+            import importlib
+            import inspect
             import json
             import os
+            import sys
             from pathlib import Path
 
-            import importlib
             from importlib.metadata import version
 
             from IPython.display import JSON, Markdown, display
 
-            import knowledge_pack_studio as studio_package
-
-            if not hasattr(studio_package, "NotebookStudio"):
-                importlib.invalidate_caches()
-                studio_package = importlib.reload(studio_package)
+            # A pip refresh can leave pre-refresh submodules in a running notebook kernel. Remove
+            # the complete package family so NotebookStudio, ArtifactStore, and models come from
+            # one installed revision rather than a mixture of v0.1 and v0.2 modules.
+            stale_studio_modules = [
+                name
+                for name in tuple(sys.modules)
+                if name == "knowledge_pack_studio" or name.startswith("knowledge_pack_studio.")
+            ]
+            for module_name in stale_studio_modules:
+                del sys.modules[module_name]
+            importlib.invalidate_caches()
+            studio_package = importlib.import_module("knowledge_pack_studio")
             if not hasattr(studio_package, "NotebookStudio"):
                 raise RuntimeError(
                     "The pre-v0.2 package is still cached. Choose Runtime → Restart session, "
                     "then run sections 0 and 1 again."
                 )
             NotebookStudio = studio_package.NotebookStudio
+            artifact_store_parameters = inspect.signature(
+                importlib.import_module("knowledge_pack_studio.store").ArtifactStore
+            ).parameters
+            if "event_sink" not in artifact_store_parameters:
+                raise RuntimeError(
+                    "Studio modules came from mixed revisions. Choose Runtime → Restart session, "
+                    "then run sections 0 and 1 again."
+                )
             print(
                 "Loaded Studio",
                 version("flashfeed-knowledge-pack-studio"),
                 "from",
                 studio_package.__file__,
             )
+            if stale_studio_modules:
+                print(f"Refreshed {len(stale_studio_modules)} cached Studio module(s).")
 
             USE_GOOGLE_DRIVE = True  # @param {type:"boolean"}
             COLAB_SECRET_NAME = "OPENAI_API_KEY_FF_KP"
