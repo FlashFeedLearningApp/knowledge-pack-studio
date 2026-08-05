@@ -192,3 +192,32 @@ def test_notebook_facade_resumes_artifacts_and_reports_progress(tmp_path):
     assert status["event_count"] > 0
     assert status["final_bundle_path"]
     assert "Grounded research" in resumed.status_markdown()
+
+
+def test_notebook_interview_persists_required_outcome_and_approves(tmp_path):
+    studio = NotebookStudio(tmp_path / "runs", echo_progress=False)
+    studio.create_run("Interview this idea", mock=True)
+    draft = studio.clarify({"audience": "Adult beginners", "desired_outcomes": []})
+
+    question = next(
+        row
+        for row in draft.clarification_questions
+        if row.question_id == "required-learning-outcomes"
+    )
+    assert question.required is True
+    assert question.suggested_answer
+
+    interview = studio.clarification_interview()
+    response = interview.children[3]
+    save_button = interview.children[4].children[0]
+    approve_button = interview.children[5].children[2]
+    assert approve_button.disabled is True
+    response.value = question.suggested_answer
+    save_button.click()
+    assert approve_button.disabled is False
+    approve_button.click()
+
+    approved = studio.store.read_json(studio.current_run_id, "brief/approved-brief.json")
+    assert approved["requester_approved"] is True
+    assert approved["requester_answers"][question.question_id] == question.suggested_answer
+    assert studio.clarification_state()["answers"][question.question_id]

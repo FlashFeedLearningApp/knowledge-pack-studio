@@ -13,6 +13,7 @@ from .models import (
     ApprovedBrief,
     AuthoredItems,
     BriefDraft,
+    ClarificationQuestion,
     EvidenceLedger,
     PackDesign,
     ResearchDossier,
@@ -70,6 +71,40 @@ class StudioWorkflow:
         self.store.invalidate_downstream(run_id, stage)
         self.store.set_stage(run_id, stage, StageState.RUNNING)
 
+    @staticmethod
+    def _apply_clarification_gates(result: BriefDraft, intake: dict[str, Any]) -> BriefDraft:
+        """Turn missing essential intake decisions into explicit interview gates."""
+
+        outcomes = intake.get("desired_outcomes") or []
+        if isinstance(outcomes, str):
+            outcomes = [line.strip() for line in outcomes.splitlines() if line.strip()]
+        known_ids = {question.question_id for question in result.clarification_questions}
+        if not outcomes and "required-learning-outcomes" not in known_ids:
+            result.clarification_questions.insert(
+                0,
+                ClarificationQuestion(
+                    question_id="required-learning-outcomes",
+                    question=(
+                        "What should learners understand or be able to do after completing "
+                        "this knowledge pack?"
+                    ),
+                    why_it_matters=(
+                        "At least one requester-confirmed learning outcome is required to plan "
+                        "lessons, evidence coverage, and assessment items."
+                    ),
+                    required=True,
+                    suggested_answer="; ".join(result.learning_outcomes),
+                ),
+            )
+
+        if result.time_sensitivity in {"medium", "high"}:
+            temporal_terms = ("current", "year", "upcoming", "date", "latest")
+            for question in result.clarification_questions:
+                searchable = f"{question.question_id} {question.question}".lower()
+                if any(term in searchable for term in temporal_terms):
+                    question.required = True
+        return result
+
     def _fail(self, run_id: str, stage: str, exc: Exception) -> None:
         self.store.write_json(
             run_id,
@@ -97,6 +132,7 @@ class StudioWorkflow:
         try:
             idea = self.store.read_json(run_id, "idea.json")["idea"]
             result, call = self._provider(run_id, credentials).clarify(idea, intake)
+            result = self._apply_clarification_gates(result, intake)
             # The run date is execution metadata owned by deterministic code, not an LLM guess.
             result.as_of_date = utc_now()[:10]
             self.store.record_call(run_id, call)
@@ -889,7 +925,16 @@ class StudioWorkflow:
     def run_all_mock(self, idea: str = "Demonstrate the knowledge-pack pipeline") -> str:
         run_id = self.create_run(idea, mock=True)
         credentials: dict[str, str] = {}
-        self.clarify(run_id, {"audience": "Curious adult beginners"}, credentials)
+        self.clarify(
+            run_id,
+            {
+                "audience": "Curious adult beginners",
+                "desired_outcomes": [
+                    "Explain the demonstrated topic using evidence-linked learning items"
+                ],
+            },
+            credentials,
+        )
         self.approve_brief(run_id, {})
         self.research(run_id, credentials)
         self.extract(run_id, credentials)

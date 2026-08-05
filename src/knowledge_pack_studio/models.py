@@ -22,6 +22,7 @@ class ClarificationQuestion(StrictModel):
     question: str
     why_it_matters: str
     required: bool = True
+    suggested_answer: str = ""
 
 
 class BriefDraft(StrictModel):

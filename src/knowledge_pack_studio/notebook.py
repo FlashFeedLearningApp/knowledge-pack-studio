@@ -8,7 +8,7 @@ from typing import Any
 
 from .config import StudioConfig
 from .diagnostics import build_diagnostics_bundle, studio_runtime_identity
-from .models import RunEvent, StageState
+from .models import RunEvent, StageState, utc_now
 from .store import STAGE_NAMES, STAGES, ArtifactStore
 from .workflow import StudioWorkflow
 
@@ -113,8 +113,75 @@ class NotebookStudio:
         draft = self.store.read_json(self._run_id(run_id), "brief/brief-draft.json")
         return draft.get("clarification_questions", [])
 
+    def clarification_state(self, run_id: str | None = None) -> dict[str, Any]:
+        selected = self._run_id(run_id)
+        path = self.store.run_dir(selected) / "brief/requester-answers.json"
+        if not path.is_file():
+            return {"answers": {}, "skipped": [], "updated_at": None}
+        return self.store.read_json(selected, "brief/requester-answers.json")
+
+    def _save_clarification_state(
+        self,
+        answers: dict[str, str],
+        skipped: list[str],
+        run_id: str | None = None,
+    ) -> dict[str, Any]:
+        selected = self._run_id(run_id)
+        state = {
+            "answers": answers,
+            "skipped": sorted(set(skipped)),
+            "updated_at": utc_now(),
+        }
+        self.store.write_json(
+            selected,
+            "requester_answers",
+            "brief/requester-answers.json",
+            state,
+            self.store.artifact_hashes(selected, "brief_draft"),
+            "requester",
+        )
+        return state
+
+    def save_clarification_answer(
+        self,
+        question_id: str,
+        answer: str,
+        run_id: str | None = None,
+    ) -> dict[str, Any]:
+        questions = {row["question_id"]: row for row in self.clarification_questions(run_id)}
+        if question_id not in questions:
+            raise KeyError(f"Unknown clarification question: {question_id}")
+        cleaned = answer.strip()
+        if not cleaned:
+            raise ValueError("Enter a response before saving")
+        state = self.clarification_state(run_id)
+        state["answers"][question_id] = cleaned
+        skipped = [value for value in state["skipped"] if value != question_id]
+        return self._save_clarification_state(state["answers"], skipped, run_id)
+
+    def skip_clarification_question(
+        self, question_id: str, run_id: str | None = None
+    ) -> dict[str, Any]:
+        questions = {row["question_id"]: row for row in self.clarification_questions(run_id)}
+        question = questions.get(question_id)
+        if not question:
+            raise KeyError(f"Unknown clarification question: {question_id}")
+        if question["required"]:
+            raise ValueError("Required clarification questions cannot be skipped")
+        state = self.clarification_state(run_id)
+        state["answers"].pop(question_id, None)
+        return self._save_clarification_state(
+            state["answers"], [*state["skipped"], question_id], run_id
+        )
+
+    def clarification_interview(self, run_id: str | None = None):
+        from .interview import build_clarification_interview
+
+        return build_clarification_interview(self, self._run_id(run_id))
+
     def approve(self, answers: dict[str, str], run_id: str | None = None):
-        return self.workflow.approve_brief(self._run_id(run_id), answers)
+        saved = self.clarification_state(run_id)["answers"]
+        return self.workflow.approve_brief(self._run_id(run_id), {**saved, **answers})
 
     def research(
         self,

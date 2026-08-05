@@ -286,37 +286,30 @@ def main() -> None:
             studio.show_status()
             """
         ),
-        md("## 3 · Answer clarification questions and approve the brief"),
+        md(
+            """
+            ## 3 · Complete the clarification interview and approve the brief
+
+            Reply to one question at a time. Responses save immediately to the run. Optional
+            questions may be explicitly skipped; required questions must be answered before the
+            green approval button becomes available.
+            """
+        ),
         code(
             """
-            # @title Review and approve (edit ANSWERS when questions are shown)
-            APPROVE_BRIEF = False  # @param {type:"boolean"}
-            ANSWERS = {
-                # "question-id": "Your answer",
-            }
+            # @title Open the clarification chat
+            try:
+                from google.colab import output
+                output.enable_custom_widget_manager()
+            except ImportError:
+                pass
 
-            questions = studio.clarification_questions()
-            if questions:
-                display(Markdown("### Clarification questions"))
-                display(JSON(questions, expanded=True))
-                template = {row["question_id"]: "" for row in questions if row["required"]}
-                print("Copy these required IDs into ANSWERS and add your responses:")
-                print(json.dumps(template, indent=2))
-            else:
-                print("The brief has no unanswered clarification questions.")
-
-            if APPROVE_BRIEF:
-                approved = studio.approve(ANSWERS)
-                display(JSON(approved.model_dump(mode="json"), expanded=False))
-                print("Brief approved. Continue to grounded research.")
-            else:
-                display(
-                    Markdown(
-                        "> **STOP — the brief is not approved.** Review it, set "
-                        "`APPROVE_BRIEF = True`, and rerun this cell before continuing to research."
-                    )
-                )
-            studio.show_status()
+            clarification_chat = studio.clarification_interview()
+            display(clarification_chat)
+            print(
+                "Use the chat controls above. After it confirms the brief is approved, "
+                "continue to section 4."
+            )
             """
         ),
         md(

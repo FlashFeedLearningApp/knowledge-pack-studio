@@ -54,6 +54,8 @@ def test_native_notebook_is_valid_headless_and_self_contained():
     assert 'STUDIO_PREVIEW_REVISION = "agent/native-notebook-codespaces-v02"' in source
     assert 'name.startswith("knowledge_pack_studio.")' in source
     assert '"event_sink" not in artifact_store_parameters' in source
+    assert "studio.clarification_interview()" in source
+    assert "Copy these required IDs into ANSWERS" not in source
     assert "source first" in source
     assert "studio.design()" in source
     assert source.index("studio.design()") < source.index("studio.write_guide()")

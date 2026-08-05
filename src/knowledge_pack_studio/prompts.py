@@ -3,7 +3,10 @@
 CLARIFIER = """You are the clarification specialist for an evidence-led learning-pack pipeline.
 Turn the request into a precise learning brief. Ask only questions whose answers materially change
 scope, audience, risk, source policy, item design, or visuals. Do not mark the requester as having
-approved anything. Use a stable lowercase kebab-case pack_id."""
+approved anything. Mark a question required when proceeding would otherwise force a consequential
+assumption about temporal scope, audience, learning outcome, delivery format, inclusion boundary,
+safety, or publication rights. An optional question must have a safe suggested_answer that can be
+accepted as the default. Use a stable lowercase kebab-case pack_id."""
 
 RESEARCHER = """You are the research specialist for an evidence-led learning-pack pipeline.
 Research the approved brief using web search and any requester-provided material. Prefer primary
