@@ -48,9 +48,12 @@ def main() -> None:
             # @title Install or refresh dependencies
             import subprocess
             import sys
+            from importlib.metadata import version
             from pathlib import Path
 
             STUDIO_REPOSITORY = "https://github.com/FlashFeedLearningApp/knowledge-pack-studio.git"
+            STUDIO_PRIMARY_REVISION = "main"
+            STUDIO_PREVIEW_REVISION = "agent/native-notebook-codespaces-v02"
             IMAGE_REPOSITORY = "https://github.com/garygeo-19/image-sourcery.git"
             IMAGE_REVISION = "5fc6ce4da1ca6ba869abc065a9495b5f6c92b73b"
             INSTALL_IMAGE_SOURCERY = True  # @param {type:"boolean"}
@@ -62,20 +65,31 @@ def main() -> None:
                     [sys.executable, "-m", "pip", "install", "-q", "-e", "."], check=True
                 )
             else:
-                subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        "-q",
-                        "--upgrade",
-                        "--force-reinstall",
-                        "--no-cache-dir",
-                        f"git+{STUDIO_REPOSITORY}@main",
-                    ],
-                    check=True,
-                )
+                def install_studio(revision):
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "pip",
+                            "install",
+                            "-q",
+                            "--upgrade",
+                            "--force-reinstall",
+                            "--no-cache-dir",
+                            f"git+{STUDIO_REPOSITORY}@{revision}",
+                        ],
+                        check=True,
+                    )
+
+                install_studio(STUDIO_PRIMARY_REVISION)
+                installed_parts = version("flashfeed-knowledge-pack-studio").split(".")
+                installed_series = tuple(int(value) for value in installed_parts[:2])
+                if installed_series < (0, 2):
+                    print(
+                        "main does not contain the v0.2 notebook engine yet; "
+                        f"installing preview revision {STUDIO_PREVIEW_REVISION}"
+                    )
+                    install_studio(STUDIO_PREVIEW_REVISION)
 
             IMAGE_SOURCERY_COMMAND = None
             if INSTALL_IMAGE_SOURCERY:
@@ -105,10 +119,14 @@ def main() -> None:
                 )
                 IMAGE_SOURCERY_COMMAND = ["node", str(image_root / "dist/cli.js")]
 
-            from knowledge_pack_studio import __version__
-
-            print(f"Studio {__version__} installed")
+            installed_version = version("flashfeed-knowledge-pack-studio")
+            print(f"Studio {installed_version} installed")
             print("Image Source-cery ready" if IMAGE_SOURCERY_COMMAND else "Image sourcing disabled")
+            print(
+                "If an earlier setup cell already produced an import error in this runtime, "
+                "re-run section 1. It will reload the refreshed package; restart the runtime "
+                "only if section 1 explicitly asks you to."
+            )
             """
         ),
         md("## 1 · Connect credentials and checkpoint storage"),
@@ -119,8 +137,28 @@ def main() -> None:
             import os
             from pathlib import Path
 
+            import importlib
+            from importlib.metadata import version
+
             from IPython.display import JSON, Markdown, display
-            from knowledge_pack_studio import NotebookStudio
+
+            import knowledge_pack_studio as studio_package
+
+            if not hasattr(studio_package, "NotebookStudio"):
+                importlib.invalidate_caches()
+                studio_package = importlib.reload(studio_package)
+            if not hasattr(studio_package, "NotebookStudio"):
+                raise RuntimeError(
+                    "The pre-v0.2 package is still cached. Choose Runtime → Restart session, "
+                    "then run sections 0 and 1 again."
+                )
+            NotebookStudio = studio_package.NotebookStudio
+            print(
+                "Loaded Studio",
+                version("flashfeed-knowledge-pack-studio"),
+                "from",
+                studio_package.__file__,
+            )
 
             USE_GOOGLE_DRIVE = True  # @param {type:"boolean"}
             COLAB_SECRET_NAME = "OPENAI_API_KEY_FF_KP"

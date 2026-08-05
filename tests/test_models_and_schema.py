@@ -51,6 +51,8 @@ def test_native_notebook_is_valid_headless_and_self_contained():
     source = "\n".join("".join(cell.source) for cell in notebook.cells)
     assert "NotebookStudio" in source
     assert "OPENAI_API_KEY_FF_KP" in source
+    assert 'STUDIO_PREVIEW_REVISION = "agent/native-notebook-codespaces-v02"' in source
+    assert "importlib.reload(studio_package)" in source
     assert "source first" in source
     assert "studio.design()" in source
     assert source.index("studio.design()") < source.index("studio.write_guide()")
