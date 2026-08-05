@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import StudioConfig
-from .diagnostics import build_diagnostics_bundle, redact_secrets
+from .diagnostics import build_diagnostics_bundle, redact_secrets, studio_runtime_identity
 from .models import StageState
 from .store import STAGE_NAMES, STAGES, ArtifactStore
 from .workflow import StudioWorkflow
@@ -84,6 +84,8 @@ CSS = """
   box-shadow:0 0 20px #c98a2822; }
 .kp-mode.live { color:#a9f0d6; background:#102a23; border:2px solid #2c9b79; }
 .kp-status { padding:10px 14px; border-left:3px solid var(--kp-accent); background:#11182a; }
+.kp-build { margin:10px 0 2px; padding:8px 12px; border:1px solid #29334a;
+  border-radius:10px; color:#aeb9cf; background:#0d1321; font-size:12px; }
 .kp-activity { display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
   padding:16px 18px; margin:2px 0 12px; border:1px solid #34405a; border-radius:16px;
   background:linear-gradient(120deg,#141d31,#101727); color:var(--kp-text); }
@@ -275,6 +277,33 @@ def _validate_share_auth(share: bool, auth: Any) -> None:
             "Public Gradio share links require authentication. Pass auth=(username, password) "
             "or launch locally with share=False."
         )
+
+
+def _runtime_identity_html() -> str:
+    identity = studio_runtime_identity()
+    version = html.escape(identity.get("package_version") or "source tree")
+    commit = identity.get("source_commit")
+    source = html.escape(commit[:12] if commit else identity.get("install_kind") or "unknown")
+    gradio_version = html.escape(identity.get("gradio_version") or "unknown")
+    return (
+        '<div class="kp-build"><strong>Running build:</strong> '
+        f"Studio {version} · source {source} · Gradio {gradio_version}</div>"
+    )
+
+
+def _print_launch_diagnostics(*, share: bool, launch_kwargs: dict[str, Any]) -> None:
+    identity = studio_runtime_identity()
+    source_commit = identity.get("source_commit")
+    source = source_commit[:12] if source_commit else identity.get("install_kind") or "unknown"
+    print("Knowledge Pack Studio launch diagnostics")
+    print(f"  Studio package: {identity.get('package_version') or 'source tree'}")
+    print(f"  Source: {source}")
+    print(f"  Gradio: {identity.get('gradio_version') or 'unknown'}")
+    print(f"  Access: {'authenticated public share' if share else 'private Colab/local proxy'}")
+    if launch_kwargs.get("server_port"):
+        print(f"  Server port: {launch_kwargs['server_port']}")
+    print("  Server errors: shown below this cell while it is running")
+    print("  Run activity: persisted in each run manifest and downloadable from the Studio")
 
 
 def _available_local_port(start: int = 7860, attempts: int = 100) -> int:
@@ -910,6 +939,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             <p>Turn an idea into an evidence-led FlashFeed pack through explicit research,
             extraction, study, design, authoring, visual, and validation stages.</p></div>"""
         )
+        gr.HTML(_runtime_identity_html())
         gr.HTML(
             """<div class="kp-warning"><strong>Credential policy:</strong> keys are passed to the
             current Colab/Python process only. They are not written into run artifacts or exports.
@@ -929,6 +959,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 choices=store.list_runs(), label="Resume a run", allow_custom_value=False, scale=2
             )
             load_button = gr.Button("Load", scale=1)
+            refresh_button = gr.Button("Refresh activity", scale=1)
         activity_summary = gr.HTML(_activity_html(store, None))
         with gr.Accordion("Live run activity and agent log", open=True):
             gr.Markdown(
@@ -943,7 +974,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 wrap=True,
                 label="Persisted activity log",
             )
-        activity_timer = gr.Timer(value=1.0, active=True)
+        activity_timer = gr.Timer(value=5.0, active=True)
         with gr.Accordion("Provider and model settings — verify before starting", open=True):
             with gr.Row():
                 gr.Markdown(_credential_markdown(bool(default_api_key)), elem_classes="kp-status")
@@ -1182,6 +1213,13 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             load_status,
         ]
         load_button.click(load_run, [recent], resume_outputs)
+        refresh_button.click(
+            refresh_activity,
+            [run_id],
+            [flow, activity_summary, activity_log],
+            queue=False,
+            show_progress="hidden",
+        )
         lucky_button.click(
             run_lucky,
             [
@@ -1248,6 +1286,7 @@ def launch(
         is_colab=gr.utils.colab_check(),
         share=share,
     )
+    _print_launch_diagnostics(share=share, launch_kwargs=launch_kwargs)
     app = build_app(run_root, default_api_key=api_key)
     return app.launch(
         share=share,

@@ -7,6 +7,7 @@ from pathlib import Path
 import nbformat
 import pytest
 
+from knowledge_pack_studio.config import StudioConfig
 from knowledge_pack_studio.models import ItemDraft, RunManifest
 from knowledge_pack_studio.schema_loader import pack_schema_path
 from knowledge_pack_studio.ui import _prepare_launch_kwargs, _validate_share_auth, build_app
@@ -27,10 +28,16 @@ def test_notebook_is_valid_and_has_colab_metadata():
     notebook_source = "\n".join("".join(cell.source) for cell in notebook.cells)
     assert "launch(api_key=api_key, share=False, debug=True)" in notebook_source
     assert "There is no separate error-display setting to find" in notebook_source
+    assert '"--force-reinstall"' in notebook_source
+    assert "Exact build details will appear in the launch cell" in notebook_source
     assert 'COLAB_SECRET_NAME = "OPENAI_API_KEY_FF_KP"' in notebook_source
     assert "FF_KP_STUDIO_PASSWORD" not in notebook_source
     assert "userdata.get('OPENAI_API_KEY')" not in notebook_source
     assert "enter a key in the Studio UI" not in notebook_source
+
+
+def test_pipeline_version_identifies_the_refreshed_colab_build():
+    assert StudioConfig().pipeline_version == "0.1.0.dev1"
 
 
 def test_item_shape_validation_rejects_incomplete_mcq():
@@ -109,6 +116,9 @@ def test_ui_reports_credential_state_without_rendering_a_key_input(tmp_path):
     assert "OpenAI API key" not in config
     assert "OpenAI credential connected" in config
     assert "Live run activity and agent log" in config
+    assert "Running build:" in config
+    assert "Refresh activity" in config
+    assert '"value": 5.0' in config
 
 
 def test_old_manifests_load_with_an_empty_activity_log():
