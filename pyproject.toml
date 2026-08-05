@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flashfeed-knowledge-pack-studio"
+version = "0.1.0.dev0"
+description = "A Colab-first, evidence-led authoring pipeline for FlashFeed knowledge packs."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "FlashFeed Community" }]
+dependencies = [
+  "gradio==6.22.0",
+  "jsonschema==4.26.0",
+  "openai==2.53.0",
+  "pydantic==2.13.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "nbclient==0.11.0",
+  "nbformat==5.10.4",
+  "pytest==9.1.1",
+  "ruff==0.16.1",
+]
+
+[project.scripts]
+knowledge-pack-studio = "knowledge_pack_studio.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/knowledge_pack_studio"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schema/pack.schema.json" = "knowledge_pack_studio/schema/pack.schema.json"
+"schema/brief.schema.json" = "knowledge_pack_studio/schema/brief.schema.json"
+"schema/evidence-ledger.schema.json" = "knowledge_pack_studio/schema/evidence-ledger.schema.json"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

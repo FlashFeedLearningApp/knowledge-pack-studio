@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "ClaimSupport": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "support_summary": {
+          "title": "Support Summary",
+          "type": "string"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator"
+        }
+      },
+      "required": [
+        "source_id",
+        "support_summary"
+      ],
+      "title": "ClaimSupport",
+      "type": "object"
+    },
+    "EvidenceClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim": {
+          "title": "Claim",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "proposed_lesson": {
+          "title": "Proposed Lesson",
+          "type": "string"
+        },
+        "proposed_part": {
+          "title": "Proposed Part",
+          "type": "string"
+        },
+        "claim_type": {
+          "enum": [
+            "fact",
+            "definition",
+            "quantity",
+            "chronology",
+            "causation",
+            "procedure",
+            "opinion",
+            "controversy",
+            "safety-warning"
+          ],
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "support": {
+          "items": {
+            "$ref": "#/$defs/ClaimSupport"
+          },
+          "title": "Support",
+          "type": "array"
+        },
+        "agreement": {
+          "enum": [
+            "single-source",
+            "corroborated",
+            "conflicted",
+            "unknown"
+          ],
+          "title": "Agreement",
+          "type": "string"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "disputed"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "time_sensitivity": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Time Sensitivity",
+          "type": "string"
+        },
+        "allowed_uses": {
+          "items": {
+            "enum": [
+              "guide",
+              "answer-key",
+              "numeric",
+              "image-caption",
+              "background"
+            ],
+            "type": "string"
+          },
+          "title": "Allowed Uses",
+          "type": "array"
+        },
+        "approved_for_instruction": {
+          "title": "Approved For Instruction",
+          "type": "boolean"
+        },
+        "human_review_required": {
+          "title": "Human Review Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim",
+        "topic",
+        "proposed_lesson",
+        "proposed_part",
+        "claim_type",
+        "support",
+        "agreement",
+        "confidence",
+        "time_sensitivity",
+        "allowed_uses",
+        "approved_for_instruction",
+        "human_review_required"
+      ],
+      "title": "EvidenceClaim",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "topic": {
+      "title": "Topic",
+      "type": "string"
+    },
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/EvidenceClaim"
+      },
+      "title": "Claims",
+      "type": "array"
+    },
+    "research_gaps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Research Gaps",
+      "type": "array"
+    },
+    "extraction_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Extraction Notes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "topic",
+    "claims",
+    "research_gaps",
+    "extraction_notes"
+  ],
+  "title": "EvidenceLedger",
+  "type": "object"
+}

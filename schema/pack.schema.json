@@ -1,0 +1,1168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FlashFeedLearningApp/knowledge-packs/blob/main/pipeline-definition/schema/pack.schema.json",
+  "title": "FlashFeed Knowledge Pack",
+  "description": "Portable JSON Schema generated from @flashfeed/pack-schema 0.3.0. The included Zod validator remains authoritative for cross-reference and cross-field refinements.",
+  "type": "object",
+  "properties": {
+    "packId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "packName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "packVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "author": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string"
+    },
+    "tagsVocabulary": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContentItem"
+      },
+      "minItems": 1
+    },
+    "lessons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Lesson"
+      }
+    },
+    "games": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/McqGameSpec"
+      }
+    },
+    "icon": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4
+    },
+    "shortName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "packId",
+    "packName",
+    "packVersion",
+    "items"
+  ],
+  "$defs": {
+    "Illustration": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "anyOf": [
+            {
+              "pattern": "^https?://"
+            },
+            {
+              "pattern": "^/"
+            },
+            {
+              "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+            }
+          ],
+          "$comment": "Zod refinement also rejects upward traversal and non-http schemes."
+        },
+        "imagePrompt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 800
+        },
+        "imageSearchTerm": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "credit": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "creditUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "anyOf": [
+            {
+              "pattern": "^https?://"
+            },
+            {
+              "pattern": "^/"
+            },
+            {
+              "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+            }
+          ],
+          "$comment": "Zod refinement also rejects upward traversal and non-http schemes."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "photo",
+            "diagram",
+            "map",
+            "chart",
+            "scrapbook"
+          ]
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "imagePrompt",
+        "imageSearchTerm",
+        "alt"
+      ]
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "label"
+      ]
+    },
+    "Modality": {
+      "type": "string",
+      "enum": [
+        "text",
+        "image",
+        "audio"
+      ]
+    },
+    "Slot": {
+      "type": "object",
+      "properties": {
+        "modality": {
+          "$ref": "#/$defs/Modality"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "alt": {
+          "type": "string"
+        },
+        "short": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "modality",
+        "value"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "modality": {
+                "enum": [
+                  "image",
+                  "audio"
+                ]
+              }
+            },
+            "required": [
+              "modality"
+            ]
+          },
+          "then": {
+            "required": [
+              "alt"
+            ]
+          }
+        }
+      ]
+    },
+    "Fact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "fact"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "image": {
+          "$ref": "#/$defs/Slot"
+        },
+        "factVariant": {
+          "type": "string",
+          "enum": [
+            "image-heavy",
+            "scrapbook"
+          ]
+        },
+        "imageCaption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "studyGuideAnchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "title",
+        "body"
+      ]
+    },
+    "Pair": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "pair"
+        },
+        "sideA": {
+          "$ref": "#/$defs/Slot"
+        },
+        "sideB": {
+          "$ref": "#/$defs/Slot"
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "sideA",
+        "sideB"
+      ]
+    },
+    "Definition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "definition"
+        },
+        "term": {
+          "$ref": "#/$defs/Slot"
+        },
+        "definition": {
+          "$ref": "#/$defs/Slot"
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "term",
+        "definition"
+      ]
+    },
+    "MCQ": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "mcq"
+        },
+        "prompt": {
+          "$ref": "#/$defs/Slot"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "minItems": 2,
+          "maxItems": 4
+        },
+        "correctIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "prompt",
+        "options",
+        "correctIndex"
+      ]
+    },
+    "Numeric": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "numeric"
+        },
+        "prompt": {
+          "$ref": "#/$defs/Slot"
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "tolerance": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "prompt",
+        "value"
+      ]
+    },
+    "Procedure": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "procedure"
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 220
+          },
+          "minItems": 2,
+          "maxItems": 10
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 400
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "goal",
+        "steps"
+      ]
+    },
+    "Cloze": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "cloze"
+        },
+        "template": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 300,
+          "pattern": "___"
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "distractors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "accept": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "maxItems": 8
+        },
+        "typedRecall": {
+          "type": "boolean"
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "template",
+        "answer",
+        "distractors"
+      ]
+    },
+    "ComparisonSide": {
+      "type": "object",
+      "properties": {
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "anyOf": [
+            {
+              "pattern": "^https?://"
+            },
+            {
+              "pattern": "^/"
+            },
+            {
+              "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+            }
+          ],
+          "$comment": "Zod refinement also rejects upward traversal and non-http schemes."
+        },
+        "imagePrompt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 800
+        },
+        "imageSearchTerm": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "caption"
+      ]
+    },
+    "Comparison": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "comparison"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "correct": {
+          "$ref": "#/$defs/ComparisonSide"
+        },
+        "incorrect": {
+          "$ref": "#/$defs/ComparisonSide"
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "prompt",
+        "correct",
+        "incorrect"
+      ]
+    },
+    "TrueFalse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "trueFalse"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "isTrue": {
+          "type": "boolean"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "whyOptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "minItems": 2,
+          "maxItems": 4
+        },
+        "whyCorrectIndex": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "statement",
+        "isTrue",
+        "why"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "whyOptions"
+            ]
+          },
+          "then": {
+            "required": [
+              "whyCorrectIndex"
+            ]
+          }
+        }
+      ]
+    },
+    "Concept": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkedItemIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "illustration": {
+          "$ref": "#/$defs/Illustration"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "shape": {
+          "const": "concept"
+        },
+        "conceptKind": {
+          "type": "string",
+          "enum": [
+            "person",
+            "place",
+            "thing",
+            "event"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "clues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 2,
+          "maxItems": 4
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "tags",
+        "shape",
+        "conceptKind",
+        "name",
+        "clues"
+      ]
+    },
+    "ContentItem": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Fact"
+        },
+        {
+          "$ref": "#/$defs/Pair"
+        },
+        {
+          "$ref": "#/$defs/Definition"
+        },
+        {
+          "$ref": "#/$defs/MCQ"
+        },
+        {
+          "$ref": "#/$defs/Numeric"
+        },
+        {
+          "$ref": "#/$defs/Procedure"
+        },
+        {
+          "$ref": "#/$defs/Cloze"
+        },
+        {
+          "$ref": "#/$defs/Comparison"
+        },
+        {
+          "$ref": "#/$defs/TrueFalse"
+        },
+        {
+          "$ref": "#/$defs/Concept"
+        }
+      ]
+    },
+    "Part": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "order": {
+          "type": "integer"
+        },
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "blurb": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "studyGuideAnchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "studyGuidePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "title",
+        "itemIds"
+      ]
+    },
+    "LearningObjective": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "demonstrationIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "statement",
+        "demonstrationIds"
+      ]
+    },
+    "Demonstration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "requiredCorrect": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gameIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "itemIds"
+      ]
+    },
+    "ObjectiveTest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objectiveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "mcqIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 5,
+          "maxItems": 10
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "objectiveId",
+        "mcqIds"
+      ]
+    },
+    "Lesson": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "order": {
+          "type": "integer"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "minItems": 1
+        },
+        "studyGuidePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LearningObjective"
+          }
+        },
+        "demonstrations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Demonstration"
+          }
+        },
+        "objectiveTests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObjectiveTest"
+          }
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "title",
+        "parts",
+        "studyGuidePath"
+      ]
+    },
+    "McqGameSpec": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "mcq"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emoji": {
+          "type": "string",
+          "minLength": 1
+        },
+        "desc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 5
+        },
+        "revealMs": {
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 5000,
+          "default": 1800
+        },
+        "showExplanation": {
+          "type": "boolean",
+          "default": true
+        },
+        "questionMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "minItems": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "emoji",
+        "desc"
+      ]
+    }
+  },
+  "x-source-package": "@flashfeed/pack-schema",
+  "x-source-package-version": "0.3.0",
+  "x-generated-by": "pipeline-definition/schema/generate-json-schema.mjs",
+  "x-authoritative-validator": "authoritative-zod/validate.ts",
+  "x-non-json-schema-gates": [
+    "Item IDs must be unique within the pack.",
+    "linkedItemIds and Part.itemIds must resolve to existing items.",
+    "Lesson and Part IDs must be unique in their scopes.",
+    "Demonstration itemIds and Objective demonstrationIds must resolve.",
+    "Demonstration.requiredCorrect must not exceed its item count.",
+    "Objective Test IDs must be unique pack-wide, objectiveId must resolve within its lesson, and every mcqId must resolve to an MCQ item.",
+    "An objective may have no more than two Objective Tests.",
+    "MCQ.correctIndex and TrueFalse.whyCorrectIndex must be within their corresponding option arrays.",
+    "Repository validation additionally enforces attribution, answer-leak, and MCQ-integrity gates."
+  ]
+}

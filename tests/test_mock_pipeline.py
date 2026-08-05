@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import json
+import zipfile
+
+from jsonschema import Draft202012Validator
+
+from knowledge_pack_studio.schema_loader import load_pack_schema
+from knowledge_pack_studio.store import ArtifactStore
+from knowledge_pack_studio.workflow import StudioWorkflow
+
+
+def test_mock_pipeline_is_resumable_valid_and_fail_closed(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+
+    run_id = workflow.run_all_mock("Create a sample pack")
+    manifest = store.load_manifest(run_id)
+    report = store.read_json(run_id, "validation/validation-report.json")
+    pack = store.read_json(run_id, f"publishable/{manifest.final_pack_id}/pack.json")
+
+    assert manifest.status == "draft_packaged"
+    assert manifest.final_bundle_path
+    assert report["hard_gates_passed"] is False
+    assert report["publishable"] is False
+    assert any(issue["code"] == "MOCK_PROVIDER" for issue in report["issues"])
+    assert report["metrics"]["evidence_coverage"] == 1.0
+    assert report["metrics"]["part_assignment_coverage"] == 1.0
+
+    schema_errors = list(Draft202012Validator(load_pack_schema()).iter_errors(pack))
+    assert schema_errors == []
+
+
+def test_export_contains_publishable_pack_schema_and_audit(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.run_all_mock()
+    manifest = store.load_manifest(run_id)
+
+    with zipfile.ZipFile(manifest.final_bundle_path) as archive:
+        names = set(archive.namelist())
+        pack_root = f"publishable/{manifest.final_pack_id}"
+        assert f"{pack_root}/pack.json" in names
+        assert f"{pack_root}/guides/study-guide.md" in names
+        assert "audit/schema/pack.schema.json" in names
+        assert "audit/evidence-ledger.json" in names
+        assert "audit/validation-report.json" in names
+        assert "README.md" in names
+        assert "SHA256SUMS" in names
+        assert "DRAFT" in archive.read("README.md").decode("utf-8")
+
+
+def test_exports_never_contain_secret_values(tmp_path):
+    marker = "sk-test-secret-that-must-not-appear"
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.run_all_mock()
+    manifest = store.load_manifest(run_id)
+
+    with zipfile.ZipFile(manifest.final_bundle_path) as archive:
+        for name in archive.namelist():
+            if name.endswith((".json", ".md", "SHA256SUMS")):
+                assert marker not in archive.read(name).decode("utf-8")
+
+
+def test_manifest_records_hashes_and_no_secret_configuration(tmp_path):
+    store = ArtifactStore(tmp_path / "runs")
+    workflow = StudioWorkflow(store)
+    run_id = workflow.run_all_mock()
+    manifest = json.loads((store.run_dir(run_id) / "run-manifest.json").read_text())
+    config = json.loads((store.run_dir(run_id) / "configuration.json").read_text())
+
+    assert manifest["artifacts"]["pack_json"]["sha256"]
+    assert manifest["artifacts"]["evidence_ledger"]["input_hashes"]
+    assert "api_key" not in json.dumps(config).lower()
