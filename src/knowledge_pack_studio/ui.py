@@ -59,6 +59,8 @@ CSS = """
 .kp-note { color:#aab6cc; font-size:13px; }
 .kp-warning { padding:12px 14px; border-radius:12px; border:1px solid #665327;
   background:#2a2111; color:#ffd98b; }
+.kp-next { margin-top:20px; padding-top:16px; border-top:1px solid #2d3850; }
+.kp-next p { margin:0; color:var(--kp-muted); font-size:13px; }
 @media (max-width:900px) {
   .kp-flow { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .kp-node:nth-child(3n)::after { content:none; }
@@ -110,6 +112,16 @@ def _in_colab() -> bool:
     return "COLAB_RELEASE_TAG" in os.environ or Path("/content").is_dir()
 
 
+def _validate_share_auth(share: bool, auth: Any) -> None:
+    """Refuse an unauthenticated public tunnel, which would expose callbacks and run data."""
+
+    if share and not auth:
+        raise RuntimeError(
+            "Public Gradio share links require authentication. Pass auth=(username, password) "
+            "or launch locally with share=False."
+        )
+
+
 def build_app(run_root: str | Path | None = None, default_api_key: str | None = None):
     try:
         import gradio as gr
@@ -119,6 +131,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
     store = ArtifactStore(run_root)
     workflow = StudioWorkflow(store)
     default_config = StudioConfig().model_dump_json(indent=2)
+    guide_progress = gr.Progress()
+    design_progress = gr.Progress()
 
     def credentials(entered_key: str) -> dict[str, str]:
         key = (entered_key or default_api_key or "").strip()
@@ -178,15 +192,19 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         ledger = workflow.extract(run_id, credentials(api_key))
         return _json(ledger), _flow_html(store, run_id)
 
-    def run_guide(run_id: str, api_key: str):
+    def run_guide(run_id: str, api_key: str, progress=guide_progress):
         run_id = _require_run(run_id)
+        progress(0.1, desc="Preparing the approved evidence…")
         guide = workflow.write_guide(run_id, credentials(api_key))
-        return guide, _flow_html(store, run_id)
+        progress(1.0, desc="Study guide complete")
+        return guide, "✅ Study guide complete.", _flow_html(store, run_id)
 
-    def run_design(run_id: str, api_key: str):
+    def run_design(run_id: str, api_key: str, progress=design_progress):
         run_id = _require_run(run_id)
+        progress(0.1, desc="Mapping guide sections to pack parts…")
         design = workflow.design(run_id, credentials(api_key))
-        return _json(design), _flow_html(store, run_id)
+        progress(1.0, desc="Pack design complete")
+        return _json(design), "✅ Pack design complete.", _flow_html(store, run_id)
 
     def run_author(run_id: str, api_key: str):
         run_id = _require_run(run_id)
@@ -235,7 +253,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         gr.HTML(
             """<div class="kp-warning"><strong>Credential policy:</strong> keys are passed to the
             current Colab/Python process only. They are not written into run artifacts or exports.
-            Mock mode requires no key and can never pass the publication gate.</div>"""
+            Public Colab launches also require password authentication. Mock mode requires no key
+            and can never pass the publication gate.</div>"""
         )
         flow = gr.HTML(_flow_html(store, None))
         with gr.Row():
@@ -258,8 +277,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 label="Versioned run configuration",
             )
 
-        with gr.Tabs():
-            with gr.Tab("1 · Idea and brief"):
+        with gr.Tabs(selected="idea") as main_tabs:
+            with gr.Tab("1 · Idea and brief", id="idea"):
                 idea = gr.Textbox(
                     label="Idea",
                     lines=4,
@@ -279,8 +298,11 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 )
                 approve_button = gr.Button("Approve brief")
                 approved_brief = gr.Code(label="Approved brief", language="json")
+                with gr.Row(elem_classes="kp-next"):
+                    gr.Markdown("Brief approved? Continue to the next high-level step.")
+                    next_research = gr.Button("Next: Research and extraction →", variant="primary")
 
-            with gr.Tab("2 · Research and extraction"):
+            with gr.Tab("2 · Research and extraction", id="research"):
                 source_urls = gr.Textbox(label="Requester source URLs (one per line)", lines=4)
                 uploads = gr.File(label="Requester files", file_count="multiple", type="filepath")
                 research_button = gr.Button("Run grounded research", variant="primary")
@@ -293,22 +315,35 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 )
                 extraction_button = gr.Button("Extract evidence ledger")
                 evidence_json = gr.Code(label="Evidence ledger", language="json")
+                with gr.Row(elem_classes="kp-next"):
+                    gr.Markdown("Evidence extracted? Continue to the learner-facing guide.")
+                    next_guide = gr.Button("Next: Study guide and design →", variant="primary")
 
-            with gr.Tab("3 · Study guide and design"):
+            with gr.Tab("3 · Study guide and design", id="guide"):
                 guide_button = gr.Button("Write study guide", variant="primary")
+                guide_status = gr.Markdown("Ready to write the learner-facing study guide.")
                 guide_markdown = gr.Markdown()
                 design_button = gr.Button("Create pack design")
+                design_status = gr.Markdown("Create the guide before designing the pack.")
                 design_json = gr.Code(label="Pack design", language="json")
+                with gr.Row(elem_classes="kp-next"):
+                    gr.Markdown("Guide and design ready? Continue to item and visual authoring.")
+                    next_author = gr.Button("Next: Author and visuals →", variant="primary")
 
-            with gr.Tab("4 · Author and visuals"):
+            with gr.Tab("4 · Author and visuals", id="author"):
                 author_button = gr.Button("Author seed items", variant="primary")
                 items_json = gr.Code(label="Authored items", language="json")
                 visual_button = gr.Button("Plan instructional visuals")
                 visual_json = gr.Code(label="Visual plan", language="json")
                 image_button = gr.Button("Generate approved images")
                 image_json = gr.Code(label="Image ledger", language="json")
+                with gr.Row(elem_classes="kp-next"):
+                    gr.Markdown("Content and visuals ready? Continue to the quality gates.")
+                    next_validate = gr.Button(
+                        "Next: Validate, review, and export →", variant="primary"
+                    )
 
-            with gr.Tab("5 · Validate, review, and export"):
+            with gr.Tab("5 · Validate, review, and export", id="validate"):
                 validate_button = gr.Button("Run deterministic validation", variant="primary")
                 validation_json = gr.Code(label="Validation report", language="json")
                 review_button = gr.Button("Run independent semantic review")
@@ -328,8 +363,20 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             [research_report, source_table, flow],
         )
         extraction_button.click(run_extraction, [run_id, api_key], [evidence_json, flow])
-        guide_button.click(run_guide, [run_id, api_key], [guide_markdown, flow])
-        design_button.click(run_design, [run_id, api_key], [design_json, flow])
+        guide_button.click(
+            run_guide,
+            [run_id, api_key],
+            [guide_markdown, guide_status, flow],
+            show_progress="full",
+            show_progress_on=guide_status,
+        )
+        design_button.click(
+            run_design,
+            [run_id, api_key],
+            [design_json, design_status, flow],
+            show_progress="full",
+            show_progress_on=design_status,
+        )
         author_button.click(run_author, [run_id, api_key], [items_json, flow])
         visual_button.click(run_visual_plan, [run_id, api_key], [visual_json, flow])
         image_button.click(run_images, [run_id, api_key], [image_json, flow])
@@ -341,6 +388,10 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         )
         export_button.click(run_export, [run_id], [bundle_file, flow])
         load_button.click(load_run, [recent], [run_id, flow])
+        next_research.click(lambda: gr.Tabs(selected="research"), outputs=main_tabs)
+        next_guide.click(lambda: gr.Tabs(selected="guide"), outputs=main_tabs)
+        next_author.click(lambda: gr.Tabs(selected="author"), outputs=main_tabs)
+        next_validate.click(lambda: gr.Tabs(selected="validate"), outputs=main_tabs)
 
     return app
 
@@ -357,6 +408,7 @@ def launch(
 
     if share is None:
         share = _in_colab()
+    _validate_share_auth(share, launch_kwargs.get("auth"))
     app = build_app(run_root, default_api_key=api_key)
     return app.launch(
         share=share,

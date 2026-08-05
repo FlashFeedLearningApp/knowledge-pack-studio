@@ -151,7 +151,7 @@ def validate_pack(
         shape: round(count / item_count, 4) if item_count else 0.0
         for shape, count in sorted(shape_counts.items())
     }
-    for shape, target in design.target_shape_ratios.items():
+    for shape, target in design.target_shape_ratios.model_dump().items():
         actual = shape_ratios.get(shape, 0.0)
         if abs(actual - target) > 0.15:
             issues.append(

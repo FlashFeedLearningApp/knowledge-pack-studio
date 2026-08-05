@@ -53,7 +53,9 @@ knowledge-pack-studio
 Mock mode does not need an API key. For live use, enter a key into the masked Studio field or add
 `OPENAI_API_KEY_FF_KP` to Colab Secrets. The notebook intentionally does not fall back to a generic
 OpenAI secret, which helps authors with multiple keys select the Knowledge Pack credential
-explicitly. Keys are never written into run artifacts or export bundles.
+explicitly. Also add `FF_KP_STUDIO_PASSWORD`; the temporary Gradio share link uses the username
+`ff-kp-author` and that password. Keys and passwords are never written into run artifacts or export
+bundles.
 
 ## Artifact layout
 

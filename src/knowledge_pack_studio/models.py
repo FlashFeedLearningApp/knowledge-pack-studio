@@ -133,12 +133,23 @@ class LessonPlan(StrictModel):
     parts: list[PartPlan]
 
 
+class ShapeRatioTargets(StrictModel):
+    """Closed shape-ratio contract compatible with OpenAI strict Structured Outputs."""
+
+    fact: float
+    definition: float
+    pair: float
+    mcq: float
+    numeric: float
+    procedure: float
+
+
 class PackDesign(StrictModel):
     pack_id: str
     pack_name: str
     description: str
     target_item_count: int
-    target_shape_ratios: dict[str, float]
+    target_shape_ratios: ShapeRatioTargets
     lessons: list[LessonPlan]
     coverage_gaps: list[str]
     topic_flex_exclusions: list[str]

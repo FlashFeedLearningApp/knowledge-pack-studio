@@ -547,29 +547,22 @@ class MockProvider:
     ) -> tuple[str, AgentCallRecord]:
         guide = """# How Honey Bees Communicate
 
-## Learning objectives
-
-- Explain what the waggle dance communicates.
-- Describe how researchers decoded this behavior.
+Honey bees do more than make honey: they also exchange navigational information through movement.
+The waggle dance is a striking example of how observable behavior can carry a precise message.
 
 ## Reading the dance
 
-A forager can use a waggle dance to communicate both the direction and distance of a useful
-resource. [claim-dance-purpose] The angle of the waggle run encodes direction relative to the
-sun's position. [claim-angle]
+A forager can use a **waggle dance** to communicate both the direction and distance of a useful
+resource. The angle of the waggle run encodes direction relative to the sun's position.
 
 The important lesson is that the dance is not decorative movement: other bees can use its
 features as navigational information.
 
 ## How it was decoded
 
-Karl von Frisch's behavioral research helped decode honey bee communication. He shared the 1973
-Nobel Prize in Physiology or Medicine. [claim-frisch]
-
-## Review
-
-1. What two pieces of navigational information does the waggle dance communicate?
-2. Why was Karl von Frisch important to the scientific understanding of bees?
+Karl von Frisch's behavioral research helped decode honey bee communication. His experiments
+connected features of the dance with the bees' later travel, turning an intriguing behavior into a
+testable communication system. He shared the 1973 Nobel Prize in Physiology or Medicine.
 """
         return guide, self._call("guide_author")
 
@@ -587,6 +580,7 @@ Nobel Prize in Physiology or Medicine. [claim-frisch]
                 "pair": 0.125,
                 "mcq": 0.25,
                 "numeric": 0.125,
+                "procedure": 0.0,
             },
             lessons=[
                 LessonPlan(

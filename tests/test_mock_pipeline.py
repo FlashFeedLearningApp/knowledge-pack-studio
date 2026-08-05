@@ -27,6 +27,14 @@ def test_mock_pipeline_is_resumable_valid_and_fail_closed(tmp_path):
     assert report["metrics"]["evidence_coverage"] == 1.0
     assert report["metrics"]["part_assignment_coverage"] == 1.0
 
+    guide = (store.run_dir(run_id) / "guide/study-guide.md").read_text()
+    assert guide.startswith("# How Honey Bees Communicate\n")
+    assert "## Reading the dance" in guide
+    assert "## How it was decoded" in guide
+    assert "## Learning objectives" not in guide
+    assert "## Review" not in guide
+    assert "[claim-" not in guide
+
     schema_errors = list(Draft202012Validator(load_pack_schema()).iter_errors(pack))
     assert schema_errors == []
 
