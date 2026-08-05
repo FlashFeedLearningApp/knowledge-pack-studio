@@ -293,6 +293,17 @@ class AgentCallRecord(StrictModel):
     created_at: str
 
 
+class RunEvent(StrictModel):
+    """A persisted, user-readable activity entry for a pipeline run."""
+
+    at: str
+    stage: str
+    state: StageState
+    message: str
+    agent: str | None = None
+    model: str | None = None
+
+
 class RunManifest(StrictModel):
     run_id: str
     created_at: str
@@ -305,5 +316,6 @@ class RunManifest(StrictModel):
     stages: dict[str, StageState]
     artifacts: dict[str, ArtifactRecord]
     agent_calls: list[AgentCallRecord]
+    events: list[RunEvent] = Field(default_factory=list)
     final_pack_id: str | None = None
     final_bundle_path: str | None = None

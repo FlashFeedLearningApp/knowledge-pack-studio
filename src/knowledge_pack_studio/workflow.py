@@ -312,7 +312,9 @@ class StudioWorkflow:
             )
             provider = self._provider(run_id, credentials)
             assets: list[dict[str, Any]] = []
-            for brief in plan.briefs[: config.image_count_limit]:
+            selected_briefs = plan.briefs[: config.image_count_limit]
+            activity_model = "mock-deterministic" if manifest.mock else config.image_model
+            for index, brief in enumerate(selected_briefs, start=1):
                 base = {
                     "assetId": brief.asset_id,
                     "itemId": brief.item_id,
@@ -324,10 +326,26 @@ class StudioWorkflow:
                     "generatedAt": utc_now(),
                 }
                 if manifest.mock or not brief.generate:
+                    self.store.record_event(
+                        run_id,
+                        stage,
+                        StageState.RUNNING,
+                        f"Image {index} of {len(selected_briefs)} was skipped by the visual plan.",
+                        "image_generator",
+                        activity_model,
+                    )
                     assets.append(
                         {**base, "status": "skipped", "reason": "Mock or planning-only mode"}
                     )
                     continue
+                self.store.record_event(
+                    run_id,
+                    stage,
+                    StageState.RUNNING,
+                    f"Generating image {index} of {len(selected_briefs)} ({brief.asset_id}).",
+                    "image_generator",
+                    activity_model,
+                )
                 payload = provider.generate_image(brief.prompt)
                 relative = f"publishable/{design.pack_id}/generated/{brief.asset_id}.png"
                 record = self.store.write_bytes(
@@ -346,6 +364,14 @@ class StudioWorkflow:
                         "sha256": record.sha256,
                         "bytes": len(payload),
                     }
+                )
+                self.store.record_event(
+                    run_id,
+                    stage,
+                    StageState.RUNNING,
+                    f"Generated image {index} of {len(selected_briefs)} ({brief.asset_id}).",
+                    "image_generator",
+                    activity_model,
                 )
             ledger = {"assets": assets, "mock": manifest.mock}
             self.store.write_json(

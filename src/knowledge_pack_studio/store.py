@@ -15,6 +15,7 @@ from .config import StudioConfig, default_run_root
 from .models import (
     AgentCallRecord,
     ArtifactRecord,
+    RunEvent,
     RunManifest,
     StageState,
     utc_now,
@@ -34,6 +35,36 @@ STAGES = [
     "semantic_review",
     "export",
 ]
+
+STAGE_EXECUTORS = {
+    "clarification": "clarifier",
+    "brief_approval": "requester",
+    "research": "researcher",
+    "extraction": "extractor",
+    "study_guide": "guide_author",
+    "pack_design": "pack_designer",
+    "item_authoring": "item_author",
+    "visual_planning": "visual_director",
+    "image_generation": "image_generator",
+    "validation": "deterministic_validator",
+    "semantic_review": "reviewer",
+    "export": "packager",
+}
+
+STAGE_NAMES = {
+    "clarification": "Idea clarification",
+    "brief_approval": "Brief approval",
+    "research": "Grounded research",
+    "extraction": "Evidence extraction",
+    "study_guide": "Study-guide writing",
+    "pack_design": "Lesson and item blueprint",
+    "item_authoring": "Seed-item authoring",
+    "visual_planning": "Instructional visual planning",
+    "image_generation": "Image generation",
+    "validation": "Deterministic validation",
+    "semantic_review": "Independent semantic review",
+    "export": "Portable bundle export",
+}
 
 
 def slugify(value: str, fallback: str = "knowledge-pack") -> str:
@@ -68,6 +99,7 @@ class ArtifactStore:
             stages={name: StageState.NOT_STARTED for name in STAGES},
             artifacts={},
             agent_calls=[],
+            events=[],
         )
         self._write_json_path(run_dir / "run-manifest.json", manifest.model_dump(mode="json"))
         self.write_json(run_id, "idea", "idea.json", {"idea": idea, "createdAt": now}, [])
@@ -99,9 +131,24 @@ class ArtifactStore:
         manifest = self.load_manifest(run_id)
         if stage not in manifest.stages:
             raise KeyError(f"Unknown stage: {stage}")
+        previous_state = manifest.stages[stage]
         manifest.stages[stage] = state
         if state == StageState.FAILED:
             manifest.status = "needs_attention"
+        elif state == StageState.RUNNING:
+            manifest.status = "active"
+        if state != previous_state:
+            agent, model = self._stage_executor(manifest, stage)
+            manifest.events.append(
+                RunEvent(
+                    at=utc_now(),
+                    stage=stage,
+                    state=state,
+                    message=self._stage_message(stage, state),
+                    agent=agent,
+                    model=model,
+                )
+            )
         self.save_manifest(manifest)
 
     def invalidate_downstream(self, run_id: str, stage: str) -> None:
@@ -116,7 +163,92 @@ class ArtifactStore:
     def record_call(self, run_id: str, call: AgentCallRecord) -> None:
         manifest = self.load_manifest(run_id)
         manifest.agent_calls.append(call)
+        pipeline_stage = next(
+            (stage for stage, agent in STAGE_EXECUTORS.items() if agent == call.agent),
+            call.stage,
+        )
+        usage: list[str] = []
+        if call.input_tokens is not None:
+            usage.append(f"{call.input_tokens:,} input tokens")
+        if call.output_tokens is not None:
+            usage.append(f"{call.output_tokens:,} output tokens")
+        if call.tool_calls:
+            usage.append(f"{call.tool_calls} tool call{'s' if call.tool_calls != 1 else ''}")
+        suffix = f" ({', '.join(usage)})" if usage else ""
+        manifest.events.append(
+            RunEvent(
+                at=call.created_at,
+                stage=pipeline_stage,
+                state=StageState.RUNNING,
+                message=f"{call.agent} returned a provider response{suffix}.",
+                agent=call.agent,
+                model=call.model,
+            )
+        )
         self.save_manifest(manifest)
+
+    def record_event(
+        self,
+        run_id: str,
+        stage: str,
+        state: StageState,
+        message: str,
+        agent: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        """Append a bounded activity entry without changing stage state."""
+
+        manifest = self.load_manifest(run_id)
+        manifest.events.append(
+            RunEvent(
+                at=utc_now(),
+                stage=stage,
+                state=state,
+                message=message,
+                agent=agent,
+                model=model,
+            )
+        )
+        manifest.events = manifest.events[-500:]
+        self.save_manifest(manifest)
+
+    @staticmethod
+    def _stage_message(stage: str, state: StageState) -> str:
+        label = STAGE_NAMES[stage]
+        if state == StageState.RUNNING:
+            return f"{label} started."
+        if state == StageState.WAITING_APPROVAL:
+            return f"{label} is waiting for requester review and approval."
+        if state == StageState.COMPLETE:
+            return f"{label} completed."
+        if state == StageState.FAILED:
+            return f"{label} needs attention. Review the error or download diagnostics."
+        if state == StageState.STALE:
+            return f"{label} became stale after an upstream change."
+        return f"{label} has not started."
+
+    def _stage_executor(self, manifest: RunManifest, stage: str) -> tuple[str | None, str | None]:
+        agent = STAGE_EXECUTORS.get(stage)
+        if not agent:
+            return None, None
+        if manifest.mock and agent not in {"requester", "deterministic_validator", "packager"}:
+            return agent, "mock-deterministic"
+        if agent == "image_generator":
+            try:
+                config = StudioConfig.model_validate(
+                    self.read_json(manifest.run_id, "configuration.json")
+                )
+                return agent, config.image_model
+            except Exception:
+                return agent, None
+        try:
+            config = StudioConfig.model_validate(
+                self.read_json(manifest.run_id, "configuration.json")
+            )
+            configured = config.agents.get(agent)
+            return agent, configured.model if configured else None
+        except Exception:
+            return agent, None
 
     def write_json(
         self,

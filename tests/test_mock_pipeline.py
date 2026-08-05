@@ -28,6 +28,13 @@ def test_mock_pipeline_is_resumable_valid_and_fail_closed(tmp_path):
     assert any(issue["code"] == "MOCK_PROVIDER" for issue in report["issues"])
     assert report["metrics"]["evidence_coverage"] == 1.0
     assert report["metrics"]["part_assignment_coverage"] == 1.0
+    assert manifest.events
+    assert any(
+        event.stage == "research" and event.state.value == "running" for event in manifest.events
+    )
+    assert any(
+        event.stage == "export" and event.state.value == "complete" for event in manifest.events
+    )
 
     guide = (store.run_dir(run_id) / "guide/study-guide.md").read_text()
     assert guide.startswith("# How Honey Bees Communicate\n")
@@ -100,6 +107,8 @@ def test_resume_snapshot_restores_the_complete_workspace(tmp_path):
     assert '"items"' in snapshot["items_json"]
     assert snapshot["bundle_file"]
     assert snapshot["selected_tab"] == "validate"
+    assert "Deterministic validation needs attention" in snapshot["activity_html"]
+    assert snapshot["activity_rows"]
 
 
 def test_diagnostics_bundle_redacts_keys_and_includes_stage_errors(tmp_path):
