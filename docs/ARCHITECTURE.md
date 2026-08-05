@@ -48,7 +48,9 @@ budget at the API boundary.
 
 ## Data and trust boundaries
 
-- Browser fields pass secrets to the active Python process only.
+- The dedicated Colab Secret is injected into the active Python process; it is never rendered as a
+  browser field.
+- Standard Colab launches use the authenticated runtime proxy rather than a public Gradio tunnel.
 - Run configuration stores credential profile names, never credential values.
 - Requester files are sent to the selected provider only when the author starts research.
 - Web-search results and model output are untrusted inputs until extraction and validation.
@@ -60,8 +62,8 @@ budget at the API boundary.
 
 Implemented now:
 
-- Colab/local launcher and five-tab Gradio interface;
-- 12 visible, resumable stages with explicit brief approval;
+- Colab-private/local launcher and five-tab Gradio interface;
+- 12 visible, resumable stages with explicit brief approval and a persisted live activity log;
 - Responses API structured outputs and built-in web search;
 - requester URL and file inputs;
 - claim-level evidence ledger;

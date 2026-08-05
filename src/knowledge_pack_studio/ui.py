@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import html
 import json
-import os
 import shutil
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .config import StudioConfig
 from .diagnostics import build_diagnostics_bundle, redact_secrets
 from .models import StageState
-from .store import STAGES, ArtifactStore
+from .store import STAGE_NAMES, STAGES, ArtifactStore
 from .workflow import StudioWorkflow
 
 FLOW_LABELS = {
@@ -28,6 +29,21 @@ FLOW_LABELS = {
     "validation": "Validate",
     "semantic_review": "Review",
     "export": "Export",
+}
+
+STAGE_ACTIVITY = {
+    "clarification": "Turning the idea and requester context into a bounded brief and clarification questions.",
+    "brief_approval": "Waiting for the requester to review the brief and supply any answers.",
+    "research": "Searching the web and requester materials, grounding claims, and recording sources.",
+    "extraction": "Converting the research dossier into claim-level, source-linked evidence.",
+    "study_guide": "Writing the learner-facing lesson from approved evidence only.",
+    "pack_design": "Mapping lesson parts, item shapes, claim coverage, and target ratios.",
+    "item_authoring": "Drafting evidence-linked seed items that follow the blueprint.",
+    "visual_planning": "Deciding which instructional visuals add learning value and drafting their briefs.",
+    "image_generation": "Generating only the images approved by the visual plan.",
+    "validation": "Running schema, referential-integrity, evidence, ratio, and publication gates.",
+    "semantic_review": "Independently checking accuracy, pedagogy, ambiguity, and evidence alignment.",
+    "export": "Building the portable pack, audit materials, and checksums.",
 }
 
 
@@ -66,6 +82,20 @@ CSS = """
   box-shadow:0 0 20px #c98a2822; }
 .kp-mode.live { color:#a9f0d6; background:#102a23; border:2px solid #2c9b79; }
 .kp-status { padding:10px 14px; border-left:3px solid var(--kp-accent); background:#11182a; }
+.kp-activity { display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
+  padding:16px 18px; margin:2px 0 12px; border:1px solid #34405a; border-radius:16px;
+  background:linear-gradient(120deg,#141d31,#101727); color:var(--kp-text); }
+.kp-activity.running { border-color:#7368ff; box-shadow:0 0 24px #7368ff22; }
+.kp-activity.failed { border-color:#b54a58; }
+.kp-activity.waiting_approval { border-color:#a87925; }
+.kp-activity.idle { grid-template-columns:1fr; }
+.kp-spinner { width:20px; height:20px; border:3px solid #4e5670; border-top-color:#9b91ff;
+  border-radius:50%; animation:kp-spin .9s linear infinite; }
+.kp-activity-icon { font-size:22px; }
+.kp-activity-title { font-size:16px; font-weight:800; }
+.kp-activity-detail { margin-top:3px; color:#aeb9cf; font-size:13px; }
+.kp-activity-meta { color:#98a6c0; font-size:12px; text-align:right; white-space:nowrap; }
+@keyframes kp-spin { to { transform:rotate(360deg); } }
 .kp-next { margin-top:20px; padding-top:16px; border-top:1px solid #2d3850; }
 .kp-next p { margin:0; color:var(--kp-muted); font-size:13px; }
 @media (max-width:900px) {
@@ -90,6 +120,122 @@ def _flow_html(store: ArtifactStore, run_id: str | None) -> str:
             f"<small>{state.value.replace('_', ' ')}</small></div>"
         )
     return '<div class="kp-flow">' + "".join(nodes) + "</div>"
+
+
+def _elapsed_since(value: str) -> str:
+    try:
+        started = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        seconds = max(0, int((datetime.now(UTC) - started).total_seconds()))
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 60:
+        return f"{seconds}s elapsed"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds:02d}s elapsed"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m elapsed"
+
+
+def _activity_html(store: ArtifactStore, run_id: str | None) -> str:
+    if not run_id:
+        return (
+            '<div class="kp-activity idle"><div><div class="kp-activity-title">Ready for an idea</div>'
+            '<div class="kp-activity-detail">Create or resume a run. Live stage activity, agent, '
+            "model, and elapsed time will appear here.</div></div></div>"
+        )
+    try:
+        manifest = store.load_manifest(run_id)
+    except Exception:
+        return (
+            '<div class="kp-activity failed"><div class="kp-activity-icon">⚠️</div><div>'
+            '<div class="kp-activity-title">Run activity is unavailable</div>'
+            '<div class="kp-activity-detail">Reload the run or download diagnostics.</div></div></div>'
+        )
+
+    running = next(
+        (stage for stage in STAGES if manifest.stages[stage] == StageState.RUNNING), None
+    )
+    waiting = next(
+        (stage for stage in STAGES if manifest.stages[stage] == StageState.WAITING_APPROVAL), None
+    )
+    failed = next((stage for stage in STAGES if manifest.stages[stage] == StageState.FAILED), None)
+    stage = running or waiting or failed
+    if stage is None:
+        stage = next(
+            (name for name in STAGES if manifest.stages[name] != StageState.COMPLETE), None
+        )
+    completed = sum(state == StageState.COMPLETE for state in manifest.stages.values())
+
+    if stage is None:
+        return (
+            '<div class="kp-activity"><div class="kp-activity-icon">✅</div><div>'
+            '<div class="kp-activity-title">Pipeline complete</div>'
+            '<div class="kp-activity-detail">All 12 stages completed. Review the validation '
+            "report and download the portable bundle.</div></div>"
+            f'<div class="kp-activity-meta">{completed}/12 stages</div></div>'
+        )
+
+    state = manifest.stages[stage]
+    matching_events = [event for event in manifest.events if event.stage == stage]
+    event = matching_events[-1] if matching_events else None
+    label = STAGE_NAMES[stage]
+    detail = STAGE_ACTIVITY[stage]
+    executor = ""
+    if event and (event.agent or event.model):
+        executor = " · ".join(value for value in (event.agent, event.model) if value)
+    elapsed = _elapsed_since(event.at) if event and state == StageState.RUNNING else ""
+    safe_label = html.escape(label)
+    safe_detail = html.escape(detail)
+    safe_executor = html.escape(executor)
+    if state == StageState.RUNNING:
+        icon = '<div class="kp-spinner" aria-label="Running"></div>'
+        title = f"{safe_label} is running"
+    elif state == StageState.WAITING_APPROVAL:
+        icon = '<div class="kp-activity-icon">✋</div>'
+        title = f"{safe_label} needs your approval"
+    elif state == StageState.FAILED:
+        icon = '<div class="kp-activity-icon">❌</div>'
+        title = f"{safe_label} needs attention"
+        detail = "Retry this stage or download diagnostics to inspect the recorded error."
+        safe_detail = html.escape(detail)
+    else:
+        icon = '<div class="kp-activity-icon">▶️</div>'
+        title = f"Ready for {safe_label.lower()}"
+    meta = "<br>".join(
+        value for value in (safe_executor, html.escape(elapsed), f"{completed}/12 stages") if value
+    )
+    return (
+        f'<div class="kp-activity {state.value}">{icon}<div>'
+        f'<div class="kp-activity-title">{title}</div>'
+        f'<div class="kp-activity-detail">{safe_detail}</div></div>'
+        f'<div class="kp-activity-meta">{meta}</div></div>'
+    )
+
+
+def _activity_rows(store: ArtifactStore, run_id: str | None) -> list[list[str]]:
+    if not run_id:
+        return []
+    try:
+        events = store.load_manifest(run_id).events
+    except Exception:
+        return []
+    rows: list[list[str]] = []
+    for event in reversed(events[-75:]):
+        timestamp = event.at.replace("T", " ").replace("+00:00", " UTC")
+        executor = " · ".join(value for value in (event.agent, event.model) if value)
+        rows.append(
+            [
+                timestamp,
+                STAGE_NAMES.get(event.stage, event.stage.replace("_", " ").title()),
+                event.state.value.replace("_", " "),
+                executor,
+                event.message,
+            ]
+        )
+    return rows
 
 
 def _json(value: Any) -> str:
@@ -117,10 +263,6 @@ def _file_paths(files: Any) -> list[Path]:
 
 def _lines(value: str | None) -> list[str]:
     return [line.strip() for line in (value or "").splitlines() if line.strip()]
-
-
-def _in_colab() -> bool:
-    return "COLAB_RELEASE_TAG" in os.environ or Path("/content").is_dir()
 
 
 def _validate_share_auth(share: bool, auth: Any) -> None:
@@ -265,6 +407,8 @@ def _run_snapshot(store: ArtifactStore, run_id: str) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "flow": _flow_html(store, run_id),
+        "activity_html": _activity_html(store, run_id),
+        "activity_rows": _activity_rows(store, run_id),
         "mode_html": _mode_html(manifest.mock),
         "mock": manifest.mock,
         "config_json": json.dumps(config, indent=2, ensure_ascii=False),
@@ -331,6 +475,18 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         key = (default_api_key or "").strip()
         return {"default": key} if key else {}
 
+    def refresh_activity(run_id: str):
+        if not run_id:
+            return _flow_html(store, None), _activity_html(store, None), []
+        try:
+            return (
+                _flow_html(store, run_id),
+                _activity_html(store, run_id),
+                _activity_rows(store, run_id),
+            )
+        except Exception:
+            return gr.skip(), gr.skip(), gr.skip()
+
     def create_and_clarify(
         idea: str,
         audience: str,
@@ -346,14 +502,25 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             "desired_outcomes": _lines(outcomes),
             "constraints": _lines(constraints),
         }
+        yield (
+            run_id,
+            gr.Dropdown(choices=store.list_runs(), value=run_id),
+            gr.skip(),
+            gr.skip(),
+            _flow_html(store, run_id),
+            _activity_html(store, run_id),
+            _activity_rows(store, run_id),
+        )
         brief = workflow.clarify(run_id, intake, credentials())
         questions = _questions_markdown(brief.model_dump(mode="json"))
-        return (
+        yield (
             run_id,
             gr.Dropdown(choices=store.list_runs(), value=run_id),
             _json(brief),
             questions,
             _flow_html(store, run_id),
+            _activity_html(store, run_id),
+            _activity_rows(store, run_id),
         )
 
     def approve(run_id: str, answers_json: str):
@@ -480,6 +647,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             snapshot["run_id"],
             gr.Dropdown(choices=store.list_runs(), value=snapshot["run_id"]),
             snapshot["flow"],
+            snapshot["activity_html"],
+            snapshot["activity_rows"],
             snapshot["mode_html"],
             snapshot["mock"],
             snapshot["config_json"],
@@ -539,18 +708,29 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             "desired_outcomes": _lines(outcomes),
             "constraints": _lines(constraints),
         }
+        snapshot = _run_snapshot(store, run_id)
+        snapshot["load_status"] = "⏳ Automatic run created. Clarification is starting."
+        yield snapshot_values(snapshot)
         try:
             progress(0.05, desc="Clarifying the idea…")
             workflow.clarify(run_id, intake, credentials())
+            snapshot = _run_snapshot(store, run_id)
+            snapshot["load_status"] = "✅ Brief drafted. Checking the approval setting."
+            yield snapshot_values(snapshot)
             if not auto_approve:
-                snapshot = _run_snapshot(store, run_id)
                 snapshot["load_status"] = (
                     "⚠️ Automation stopped at brief approval. Review the draft, approve it, then "
                     "continue through the guided steps."
                 )
-                return snapshot_values(snapshot)
+                yield snapshot_values(snapshot)
+                return
 
             workflow.approve_brief(run_id, {})
+            snapshot = _run_snapshot(store, run_id)
+            snapshot["load_status"] = (
+                "✅ Brief auto-approved. Selected generation stages are starting."
+            )
+            yield snapshot_values(snapshot)
             chosen = set(selected_groups or [])
             wants_export = lucky_groups[5] in chosen
             wants_review = lucky_groups[4] in chosen or wants_export
@@ -563,22 +743,53 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 progress(0.15, desc="Researching and extracting evidence…")
                 urls = _lines(source_urls)
                 workflow.research(run_id, credentials(), urls, _file_paths(files))
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Grounded research complete. Extracting evidence."
+                yield snapshot_values(snapshot)
                 workflow.extract(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Evidence ledger complete."
+                yield snapshot_values(snapshot)
             if wants_guide:
                 progress(0.4, desc="Writing the guide and blueprint…")
                 workflow.write_guide(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = (
+                    "✅ Learner-facing study guide complete. Building the blueprint."
+                )
+                yield snapshot_values(snapshot)
                 workflow.design(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Lesson and item blueprint complete."
+                yield snapshot_values(snapshot)
             if wants_author:
                 progress(0.6, desc="Authoring items and planning visuals…")
                 workflow.author(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Seed items complete. Planning instructional visuals."
+                yield snapshot_values(snapshot)
                 workflow.plan_visuals(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Instructional visual plan complete."
+                yield snapshot_values(snapshot)
             if wants_images:
                 progress(0.75, desc="Generating planned images…")
                 workflow.generate_images(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Planned image generation complete."
+                yield snapshot_values(snapshot)
             if wants_review:
                 progress(0.85, desc="Validating and reviewing…")
                 workflow.validate(run_id)
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = (
+                    "✅ Deterministic validation complete. Running semantic review."
+                )
+                yield snapshot_values(snapshot)
                 workflow.semantic_review(run_id, credentials())
+                snapshot = _run_snapshot(store, run_id)
+                snapshot["load_status"] = "✅ Independent semantic review complete."
+                yield snapshot_values(snapshot)
             if wants_export:
                 progress(0.95, desc="Building the export bundle…")
                 workflow.export(run_id)
@@ -588,7 +799,7 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 "✅ Automatic execution finished. Review every artifact and any failed "
                 "publication gates."
             )
-            return snapshot_values(snapshot)
+            yield snapshot_values(snapshot)
         except Exception as exc:
             store.write_json(
                 run_id,
@@ -608,12 +819,24 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 "restored; retry the failed step or download diagnostics."
             )
             gr.Warning("Automatic run stopped. Completed artifacts were preserved.")
-            return snapshot_values(snapshot)
+            yield snapshot_values(snapshot)
 
     def download_diagnostics(run_id: str):
         run_id = _require_run(run_id)
         target = build_diagnostics_bundle(store, run_id)
         return str(target), f"✅ Diagnostics prepared for `{run_id}`. Review before sharing."
+
+    def download_activity_log(run_id: str):
+        run_id = _require_run(run_id)
+        manifest = store.load_manifest(run_id)
+        download_dir = Path(tempfile.mkdtemp(prefix="knowledge-pack-studio-activity-"))
+        target = download_dir / f"{run_id}-activity.jsonl"
+        lines = [
+            json.dumps(event.model_dump(mode="json"), ensure_ascii=False)
+            for event in manifest.events
+        ]
+        target.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        return str(target), f"✅ Activity log prepared for `{run_id}`."
 
     with gr.Blocks(title="Knowledge Pack Studio") as app:
         gr.HTML(
@@ -624,8 +847,9 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
         gr.HTML(
             """<div class="kp-warning"><strong>Credential policy:</strong> keys are passed to the
             current Colab/Python process only. They are not written into run artifacts or exports.
-            Public Colab launches also require password authentication. Mock mode requires no key
-            and can never pass the publication gate.</div>"""
+            The standard notebook uses Colab's authenticated private runtime proxy and creates no
+            public Gradio URL. Explicit public-share launches still require separate authentication.
+            Mock mode requires no key and can never pass the publication gate.</div>"""
         )
         mode_banner = gr.HTML(_mode_html(True))
         flow = gr.HTML(_flow_html(store, None))
@@ -639,6 +863,21 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 choices=store.list_runs(), label="Resume a run", allow_custom_value=False, scale=2
             )
             load_button = gr.Button("Load", scale=1)
+        activity_summary = gr.HTML(_activity_html(store, None))
+        with gr.Accordion("Live run activity and agent log", open=True):
+            gr.Markdown(
+                "This refreshes while work is running. Newest entries appear first and remain "
+                "available when the run is resumed."
+            )
+            activity_log = gr.Dataframe(
+                headers=["Time", "Stage", "State", "Agent · model", "Activity"],
+                datatype=["str", "str", "str", "str", "str"],
+                value=[],
+                interactive=False,
+                wrap=True,
+                label="Persisted activity log",
+            )
+        activity_timer = gr.Timer(value=1.0, active=True)
         with gr.Accordion("Provider and model settings — verify before starting", open=True):
             with gr.Row():
                 gr.Markdown(_credential_markdown(bool(default_api_key)), elem_classes="kp-status")
@@ -769,20 +1008,26 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
                 bundle_file = gr.File(label="Knowledge-pack bundle")
 
         with gr.Group():
-            gr.Markdown("### Support and session diagnostics")
+            gr.Markdown("### Support, activity log, and session diagnostics")
             gr.Markdown(
                 "Download reproducibility metadata, stage errors, and textual run artifacts. "
                 "Credentials are not persisted and key patterns are redacted, but the bundle may "
                 "contain your topic, research, and source URLs."
             )
-            diagnostics_button = gr.Button("Download session diagnostics")
+            with gr.Row():
+                activity_download_button = gr.Button("Download activity log (.jsonl)")
+                diagnostics_button = gr.Button("Download session diagnostics")
+            activity_download_status = gr.Markdown()
+            activity_download_file = gr.File(label="Session activity log")
             diagnostics_status = gr.Markdown()
             diagnostics_file = gr.File(label="Session diagnostics")
 
         create_button.click(
             create_and_clarify,
             [idea, audience, outcomes, constraints, config_json, mock_mode],
-            [run_id, recent, brief_draft, questions, flow],
+            [run_id, recent, brief_draft, questions, flow, activity_summary, activity_log],
+            show_progress="full",
+            show_progress_on=activity_summary,
         )
         approve_button.click(approve, [run_id, answers], [approved_brief, flow])
         research_button.click(
@@ -840,6 +1085,8 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             run_id,
             recent,
             flow,
+            activity_summary,
+            activity_log,
             mode_banner,
             mock_mode,
             config_json,
@@ -891,6 +1138,19 @@ def build_app(run_root: str | Path | None = None, default_api_key: str | None = 
             [run_id],
             [diagnostics_file, diagnostics_status],
         )
+        activity_download_button.click(
+            download_activity_log,
+            [run_id],
+            [activity_download_file, activity_download_status],
+        )
+        activity_timer.tick(
+            refresh_activity,
+            [run_id],
+            [flow, activity_summary, activity_log],
+            queue=False,
+            show_progress="hidden",
+            api_visibility="private",
+        )
         next_research.click(lambda: gr.Tabs(selected="research"), outputs=main_tabs)
         next_guide.click(lambda: gr.Tabs(selected="guide"), outputs=main_tabs)
         next_author.click(lambda: gr.Tabs(selected="author"), outputs=main_tabs)
@@ -905,12 +1165,15 @@ def launch(
     share: bool | None = None,
     **launch_kwargs: Any,
 ):
-    """Launch inline in Colab or locally; the key is intentionally not persisted."""
+    """Launch through Colab's private proxy or locally; never persist the API key."""
 
     import gradio as gr
 
     if share is None:
-        share = _in_colab()
+        # Gradio has a dedicated Colab iframe path backed by
+        # google.colab.kernel.proxyPort. Keeping share disabled avoids creating
+        # a public gradio.live tunnel and lets Colab enforce notebook access.
+        share = False
     _validate_share_auth(share, launch_kwargs.get("auth"))
     app = build_app(run_root, default_api_key=api_key)
     return app.launch(

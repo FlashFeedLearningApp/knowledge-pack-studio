@@ -41,8 +41,10 @@ with its supporting authoring references vendored beside it. See
 
 The Gradio Studio also restores all persisted artifacts when a run is resumed, offers an optional
 "I'm Feeling Lucky" path with explicit automatic-stage and auto-approval controls, and can download
-a credential-scrubbed session diagnostics bundle after a failure. Image generation remains an
-independent opt-in because it adds cost and is not required for every learning objective.
+a credential-scrubbed session diagnostics bundle after a failure. A live, persistent activity
+panel shows the active stage, specialist agent, model, elapsed time, and an exportable event log.
+Image generation remains an independent opt-in because it adds cost and is not required for every
+learning objective.
 
 ## Local development
 
@@ -59,9 +61,12 @@ Mock mode does not need an API key. For live Colab use, add `OPENAI_API_KEY_FF_K
 The notebook intentionally does not fall back to a generic OpenAI secret, which helps authors with
 multiple keys select the Knowledge Pack credential explicitly. The Studio has no API-key input: it
 only reports whether the dedicated credential was connected when the app launched. For local use,
-set the environment variable `OPENAI_API_KEY_FF_KP` before launching the CLI. Also add
-`FF_KP_STUDIO_PASSWORD`; the temporary Gradio share link uses the username `ff-kp-author` and that
-password. Keys and passwords are never written into run artifacts or export bundles.
+set the environment variable `OPENAI_API_KEY_FF_KP` before launching the CLI. The standard notebook
+launches with `share=False`, so Gradio uses Colab's authenticated runtime
+proxy instead of creating a public `gradio.live` URL. No second Studio username or password is
+required. Anyone using the notebook runs it under their own Colab session and supplies their own
+key. An explicitly requested public Gradio share still requires `auth=(username, password)`.
+Credentials are never written into run artifacts, activity logs, or export bundles.
 
 ## Artifact layout
 
