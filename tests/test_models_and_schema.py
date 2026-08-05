@@ -9,7 +9,7 @@ import pytest
 
 from knowledge_pack_studio.models import ItemDraft, RunManifest
 from knowledge_pack_studio.schema_loader import pack_schema_path
-from knowledge_pack_studio.ui import _validate_share_auth, build_app
+from knowledge_pack_studio.ui import _prepare_launch_kwargs, _validate_share_auth, build_app
 
 EXPECTED_PACK_SCHEMA_SHA256 = "7138d6ec4ce84679376e22b830bf8d4267815aea722210feec52f8cb22355413"
 
@@ -25,7 +25,8 @@ def test_notebook_is_valid_and_has_colab_metadata():
     nbformat.validate(notebook)
     assert notebook.metadata.colab.name == "Knowledge Pack Studio"
     notebook_source = "\n".join("".join(cell.source) for cell in notebook.cells)
-    assert "launch(api_key=api_key, share=False)" in notebook_source
+    assert "launch(api_key=api_key, share=False, debug=True)" in notebook_source
+    assert "There is no separate error-display setting to find" in notebook_source
     assert 'COLAB_SECRET_NAME = "OPENAI_API_KEY_FF_KP"' in notebook_source
     assert "FF_KP_STUDIO_PASSWORD" not in notebook_source
     assert "userdata.get('OPENAI_API_KEY')" not in notebook_source
@@ -59,6 +60,44 @@ def test_public_share_requires_authentication():
 
     _validate_share_auth(True, ("ff-kp-author", "test-password"))
     _validate_share_auth(False, None)
+
+
+def test_private_colab_launch_uses_authenticated_proxy_for_assets_and_logs():
+    proxy_calls: list[int] = []
+
+    def proxy_url(port: int) -> str:
+        proxy_calls.append(port)
+        return "https://private-colab-proxy.example/"
+
+    prepared = _prepare_launch_kwargs(
+        {"server_port": 8123},
+        is_colab=True,
+        share=False,
+        proxy_url_getter=proxy_url,
+    )
+
+    assert proxy_calls == [8123]
+    assert prepared["root_path"] == "https://private-colab-proxy.example"
+    assert prepared["debug"] is True
+    assert prepared["height"] == 900
+
+
+def test_local_and_public_launches_do_not_request_a_colab_proxy():
+    def unexpected_proxy(_: int) -> str:
+        raise AssertionError("proxy URL should not be requested")
+
+    assert _prepare_launch_kwargs(
+        {"debug": False},
+        is_colab=False,
+        share=False,
+        proxy_url_getter=unexpected_proxy,
+    ) == {"debug": False}
+    assert _prepare_launch_kwargs(
+        {"auth": ("author", "password")},
+        is_colab=True,
+        share=True,
+        proxy_url_getter=unexpected_proxy,
+    ) == {"auth": ("author", "password")}
 
 
 def test_ui_reports_credential_state_without_rendering_a_key_input(tmp_path):
