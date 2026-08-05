@@ -6,7 +6,7 @@ import html
 import json
 import shutil
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -126,8 +126,8 @@ def _elapsed_since(value: str) -> str:
     try:
         started = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
-        seconds = max(0, int((datetime.now(UTC) - started).total_seconds()))
+            started = started.replace(tzinfo=timezone.utc)
+        seconds = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
     except (TypeError, ValueError):
         return ""
     if seconds < 60:
