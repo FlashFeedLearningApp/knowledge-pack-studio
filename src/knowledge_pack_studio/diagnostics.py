@@ -31,6 +31,46 @@ def _package_version(name: str) -> str | None:
         return None
 
 
+def studio_runtime_identity() -> dict[str, str | None]:
+    """Describe the installed Studio build without exposing its source URL."""
+
+    try:
+        studio = importlib.metadata.distribution("flashfeed-knowledge-pack-studio")
+    except importlib.metadata.PackageNotFoundError:
+        return {
+            "package_version": None,
+            "source_commit": None,
+            "requested_revision": None,
+            "install_kind": "source-tree",
+            "gradio_version": _package_version("gradio"),
+        }
+
+    source_commit = None
+    requested_revision = None
+    install_kind = "package"
+    direct_url = studio.read_text("direct_url.json")
+    if direct_url:
+        try:
+            install = json.loads(direct_url)
+            vcs = install.get("vcs_info") or {}
+            source_commit = vcs.get("commit_id")
+            requested_revision = vcs.get("requested_revision")
+            if source_commit:
+                install_kind = "git"
+            elif (install.get("dir_info") or {}).get("editable"):
+                install_kind = "editable"
+        except (TypeError, json.JSONDecodeError):
+            install_kind = "package"
+
+    return {
+        "package_version": studio.version,
+        "source_commit": source_commit,
+        "requested_revision": requested_revision,
+        "install_kind": install_kind,
+        "gradio_version": _package_version("gradio"),
+    }
+
+
 def build_diagnostics_bundle(
     store: ArtifactStore, run_id: str, destination: str | Path | None = None
 ) -> Path:
@@ -51,6 +91,7 @@ def build_diagnostics_bundle(
     environment = {
         "python": platform.python_version(),
         "platform": platform.platform(),
+        "studio_runtime": studio_runtime_identity(),
         "packages": {
             name: _package_version(name)
             for name in (

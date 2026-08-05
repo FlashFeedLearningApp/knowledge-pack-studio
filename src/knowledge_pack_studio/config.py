@@ -18,7 +18,7 @@ class AgentConfig(BaseModel):
 class StudioConfig(BaseModel):
     """Configuration persisted in a run manifest, never including secret values."""
 
-    pipeline_version: str = "0.1.0.dev0"
+    pipeline_version: str = "0.1.0.dev1"
     schema_version: str = "0.3.0"
     provider: str = "openai"
     target_item_count: int = Field(default=12, ge=4, le=60)

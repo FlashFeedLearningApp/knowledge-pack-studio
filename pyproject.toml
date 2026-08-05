@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashfeed-knowledge-pack-studio"
-version = "0.1.0.dev0"
+version = "0.1.0.dev1"
 description = "A Colab-first, evidence-led authoring pipeline for FlashFeed knowledge packs."
 readme = "README.md"
 requires-python = ">=3.10"

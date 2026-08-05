@@ -71,6 +71,20 @@ requires `auth=(username, password)`. The launch cell uses `debug=True` and inte
 running so technical server errors and logs appear below that cell; this is not an in-app setting.
 Credentials are never written into run artifacts, activity logs, or export bundles.
 
+The Colab installer separately installs the pinned runtime dependencies, then force-refreshes the
+Studio package from `main` without using pip's wheel cache. This is intentional: development builds
+can otherwise share the same package version and pip may fetch a new commit without replacing the
+older installed code. The launch cell and the top of the Studio show the installed package version,
+exact Git commit when available, and Gradio version. If the Studio was already imported in the
+runtime, the installer stops with a direct instruction to restart the Colab session instead of
+silently reusing cached Python modules.
+
+The activity panel refreshes every five seconds to reduce traffic through Colab's private proxy and
+also includes a manual **Refresh activity** button. A Gradio “Connection to the server was lost”
+banner refers to the browser-to-Python transport, not to a normal pipeline validation error. Check
+the launch diagnostics immediately above the app and the server messages below it; run-stage events
+remain persisted in the run manifest and available from the activity-log download.
+
 ## Artifact layout
 
 Each run is checkpointed after every stage:
