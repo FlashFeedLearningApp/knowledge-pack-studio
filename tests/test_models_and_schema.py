@@ -9,6 +9,7 @@ import pytest
 
 from knowledge_pack_studio.models import ItemDraft
 from knowledge_pack_studio.schema_loader import pack_schema_path
+from knowledge_pack_studio.ui import _validate_share_auth
 
 EXPECTED_PACK_SCHEMA_SHA256 = "7138d6ec4ce84679376e22b830bf8d4267815aea722210feec52f8cb22355413"
 
@@ -24,8 +25,9 @@ def test_notebook_is_valid_and_has_colab_metadata():
     nbformat.validate(notebook)
     assert notebook.metadata.colab.name == "Knowledge Pack Studio"
     notebook_source = "\n".join("".join(cell.source) for cell in notebook.cells)
-    assert "launch(api_key=api_key)" in notebook_source
+    assert "launch(api_key=api_key, auth=auth)" in notebook_source
     assert "COLAB_SECRET_NAME = 'OPENAI_API_KEY_FF_KP'" in notebook_source
+    assert "COLAB_PASSWORD_SECRET_NAME = 'FF_KP_STUDIO_PASSWORD'" in notebook_source
     assert "userdata.get('OPENAI_API_KEY')" not in notebook_source
 
 
@@ -48,3 +50,11 @@ def test_pipeline_schemas_are_machine_readable():
     for filename in ("brief.schema.json", "evidence-ledger.schema.json", "pack.schema.json"):
         data = json.loads((root / filename).read_text())
         assert data.get("$schema") or data.get("type") == "object"
+
+
+def test_public_share_requires_authentication():
+    with pytest.raises(RuntimeError, match="require authentication"):
+        _validate_share_auth(True, None)
+
+    _validate_share_auth(True, ("ff-kp-author", "test-password"))
+    _validate_share_auth(False, None)

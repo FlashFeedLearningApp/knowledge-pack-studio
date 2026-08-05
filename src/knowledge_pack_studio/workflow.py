@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import StudioConfig
+from .diagnostics import redact_secrets
 from .models import (
     ApprovedBrief,
     AuthoredItems,
@@ -61,7 +62,12 @@ class StudioWorkflow:
             run_id,
             f"{stage}_error",
             f"errors/{stage}.json",
-            {"stage": stage, "error": type(exc).__name__, "message": str(exc), "at": utc_now()},
+            {
+                "stage": stage,
+                "error": type(exc).__name__,
+                "message": redact_secrets(str(exc)),
+                "at": utc_now(),
+            },
             [],
             "orchestrator",
         )

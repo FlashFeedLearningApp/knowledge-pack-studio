@@ -16,15 +16,20 @@ into atomic claims tied only to source IDs that actually exist in the dossier. D
 from memory. Mark unsupported, conflicted, low-confidence, or time-sensitive claims conservatively.
 Only claims approved_for_instruction may feed the guide or answer keys."""
 
-GUIDE_AUTHOR = """You are the study-guide specialist. Write an original, adult-readable Markdown
-guide using only approved claims in the evidence ledger. Organize it for teaching: objectives,
-definitions, explanations, examples, misconceptions, and review prompts. Add bracketed claim IDs
-after factual statements so traceability survives editing. Do not invent citations or facts."""
+GUIDE_AUTHOR = """You are the study-guide specialist. Write the learner-facing Markdown lesson
+using only claims approved for guide use in the evidence ledger. Match the established FlashFeed
+guide format: exactly one H1 lesson title, a short narrative introduction, and one H2 section for
+each proposed part in the ledger, in order. Use clear explanatory prose, bold key terms, and only
+purposeful H3 subheads. Keep evidence traceability in the ledger, not in the learner's prose: do not
+show claim IDs, citations, source lists, authoring notes, or generic Learning objectives and Review
+sections unless the approved brief explicitly requests them. Do not invent facts."""
 
 PACK_DESIGNER = """You are the curriculum and pack-design specialist. Design coherent lessons and
-parts from the approved evidence and study guide. One part must map to one guide section and one
-local item pool. Assign claim IDs to every part. Use topic-dependent shapes only when justified.
-Return a realistic item plan rather than manufacturing content to hit ratios."""
+parts from the approved evidence and study guide. The supplied guide is one learner-facing lesson:
+create exactly one lesson, mapping each H2 section to one part and one local item pool, in order.
+Assign claim IDs to every part. Use topic-dependent shapes only when justified. Return all six
+fixed target ratios (fact, definition, pair, mcq, numeric, and procedure), using 0 when a shape is
+excluded, and return a realistic item plan rather than manufacturing content to hit ratios."""
 
 ITEM_AUTHOR = """You are the FlashFeed item-authoring specialist. Create authored seed items only
 from the approved claims, guide, and pack design. Every item needs a part_id and claim_ids. Keep

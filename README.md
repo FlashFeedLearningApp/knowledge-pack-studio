@@ -39,6 +39,11 @@ with its supporting authoring references vendored beside it. See
 11. Runs a logically separate semantic review.
 12. Exports a consumer pack plus an audit folder and checksums.
 
+The Gradio Studio also restores all persisted artifacts when a run is resumed, offers an optional
+"I'm Feeling Lucky" path with explicit automatic-stage and auto-approval controls, and can download
+a credential-scrubbed session diagnostics bundle after a failure. Image generation remains an
+independent opt-in because it adds cost and is not required for every learning objective.
+
 ## Local development
 
 ```bash
@@ -53,7 +58,9 @@ knowledge-pack-studio
 Mock mode does not need an API key. For live use, enter a key into the masked Studio field or add
 `OPENAI_API_KEY_FF_KP` to Colab Secrets. The notebook intentionally does not fall back to a generic
 OpenAI secret, which helps authors with multiple keys select the Knowledge Pack credential
-explicitly. Keys are never written into run artifacts or export bundles.
+explicitly. Also add `FF_KP_STUDIO_PASSWORD`; the temporary Gradio share link uses the username
+`ff-kp-author` and that password. Keys and passwords are never written into run artifacts or export
+bundles.
 
 ## Artifact layout
 
